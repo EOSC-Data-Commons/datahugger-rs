@@ -26,3 +26,7 @@ before public and 1st release
 - [ ] dataset with ~100 files.
 - [ ] full download on a real data repo.
 - [ ] every bench test run for two types: pure cli call and wrapped python api 
+
+## notes
+
+- [ ] maybe add support to windows, it is not now because CrawlPath is using '/'.

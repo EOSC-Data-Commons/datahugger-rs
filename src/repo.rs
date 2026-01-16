@@ -1,20 +1,52 @@
-#![allow(clippy::upper_case_acronyms)]
-
 use async_trait::async_trait;
 use futures_core::stream::BoxStream;
-use serde_json::Value as JsonValue;
+use reqwest::Client;
 use url::Url;
 
-use anyhow::anyhow;
 use async_stream::try_stream;
-use reqwest::Client;
-use std::{path::Path, str::FromStr, sync::Arc};
+use std::{path::Path, sync::Arc};
 
-use crate::json_get;
+use digest::Digest;
 
-// CrawlPath track where the crawl is locating, it wraps String and provide PathBuf like methods.
+const ROOT: &str = "__ROOT__";
+
+/// A logical crawl path used to track the current location during repository crawling.
+///
+/// `CrawlPath` is a lightweight, owned wrapper around `String` that represents
+/// URL-like, slash-separated paths. It intentionally does **not** use filesystem
+/// semantics (`PathBuf`), as crawl paths follow logical repository structure rather
+/// than OS-specific path rules.
+///
+/// Paths may be *absolute* (prefixed with a special root marker) or *relative*.
+/// The root marker is an internal invariant and is stripped when converting to a
+/// relative path.
+///
+/// This type is always owned to make it safe and ergonomic to use across asynchronous
+/// tasks and threads.
+///
+/// # Invariants
+///
+/// ```
+/// const ROOT: &str = "__ROOT__";
+/// ```
+///
+/// - Absolute paths always start with `ROOT`.
+/// - Relative paths never start with `ROOT`.
+/// - Path separators are forward slashes (`'/'`).
+///
+/// # Examples
+///
+/// ```
+/// use datahugger::CrawlPath;
+///
+/// let root = CrawlPath::root();
+/// let p = root.join("dir").join("file.txt");
+///
+/// assert!(p.is_absolute());
+/// assert_eq!(p.relative().as_ref(), std::path::Path::new("dir/file.txt"));
+/// ```
 #[derive(Debug, Clone)]
-pub(crate) struct CrawlPath(String);
+pub struct CrawlPath(String);
 
 impl AsRef<Path> for CrawlPath {
     fn as_ref(&self) -> &Path {
@@ -23,14 +55,83 @@ impl AsRef<Path> for CrawlPath {
 }
 
 impl CrawlPath {
-    // concat path with the provided str into a new crawl path
-    fn join(&self, p: &str) -> CrawlPath {
+    /// Appends a path segment to this crawl path, returning a new `CrawlPath`.
+    ///
+    /// The segment is joined using a forward slash (`'/'`). This method does not
+    /// perform normalization and assumes `p` does not contain leading slashes.
+    #[must_use]
+    pub fn join(&self, p: &str) -> CrawlPath {
         let mut new_path = self.0.clone();
         if !new_path.ends_with('/') {
             new_path.push('/');
         }
         new_path.push_str(p);
         CrawlPath(new_path)
+    }
+
+    /// Returns the root crawl path.
+    ///
+    /// The root path is represented internally using a special marker and is
+    /// considered absolute.
+    #[must_use]
+    pub fn root() -> CrawlPath {
+        CrawlPath(ROOT.to_string())
+    }
+
+    /// Returns `true` if this path is absolute (i.e. starts from the crawl root).
+    #[must_use]
+    pub fn is_absolute(&self) -> bool {
+        self.0.starts_with(ROOT)
+    }
+
+    /// Converts this path into a relative crawl path.
+    ///
+    /// If the path is absolute, the root marker (and an optional following slash)
+    /// is stripped. If the path is already relative, it is returned unchanged.
+    ///
+    /// An absolute root path (`ROOT` or `ROOT/`) is converted into an empty
+    /// relative path.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this path is marked as absolute but does not start with `ROOT`.
+    /// It indicates a violation of the internal `CrawlPath` invariants.
+    #[must_use]
+    pub fn relative(&self) -> CrawlPath {
+        if !self.is_absolute() {
+            return self.clone();
+        }
+
+        let rest = self
+            .0
+            .strip_prefix(ROOT)
+            .expect("absolute paths start with ROOT");
+
+        let rest = rest.strip_prefix('/').unwrap_or(rest);
+
+        CrawlPath(rest.to_string())
+    }
+}
+
+pub enum Hasher {
+    Md5(md5::Md5),
+    Sha256(sha2::Sha256),
+}
+
+impl Hasher {
+    pub fn update(&mut self, data: &[u8]) {
+        match self {
+            Hasher::Md5(h) => h.update(data),
+            Hasher::Sha256(h) => h.update(data),
+        }
+    }
+
+    #[must_use]
+    pub fn finalize(self) -> Vec<u8> {
+        match self {
+            Hasher::Md5(h) => h.finalize().to_vec(),
+            Hasher::Sha256(h) => h.finalize().to_vec(),
+        }
     }
 }
 
@@ -44,25 +145,59 @@ pub enum Entry {
 
 #[derive(Debug, Clone)]
 pub struct DirMeta {
-    pub path: CrawlPath,
+    path: CrawlPath,
     pub api_url: Url,
 }
 
 impl DirMeta {
-    pub fn new(api_url: Url, path: &str) -> Self {
+    #[must_use]
+    pub fn new(api_url: Url, path: CrawlPath) -> Self {
+        DirMeta { path, api_url }
+    }
+    #[must_use]
+    pub fn new_root(api_url: Url) -> Self {
         DirMeta {
-            path: CrawlPath(path.to_string()),
+            path: CrawlPath(ROOT.to_string()),
             api_url,
         }
+    }
+
+    #[must_use]
+    pub fn relative(&self) -> CrawlPath {
+        self.path.relative()
+    }
+
+    #[must_use]
+    pub fn join(&self, p: &str) -> CrawlPath {
+        self.path.join(p)
     }
 }
 
 #[derive(Debug)]
 pub struct FileMeta {
-    pub path: CrawlPath,
+    path: CrawlPath,
     pub download_url: Url,
     pub size: Option<u64>,
     pub checksum: Vec<Checksum>,
+}
+
+impl FileMeta {
+    pub fn new(
+        path: CrawlPath,
+        download_url: Url,
+        size: Option<u64>,
+        checksum: Vec<Checksum>,
+    ) -> Self {
+        FileMeta {
+            path,
+            download_url,
+            size,
+            checksum,
+        }
+    }
+    pub fn relative(&self) -> CrawlPath {
+        self.path.relative()
+    }
 }
 
 #[derive(Debug)]
@@ -74,6 +209,8 @@ pub enum Checksum {
 #[async_trait]
 pub trait Repository {
     async fn list(&self, dir: DirMeta) -> anyhow::Result<Vec<Entry>>;
+    fn root_url(&self, id: &str) -> Url;
+    fn client(&self) -> Client;
 }
 
 pub fn crawl<R>(repo: Arc<R>, dir: DirMeta) -> BoxStream<'static, anyhow::Result<Entry>>
@@ -96,70 +233,4 @@ where
             }
         }
     })
-}
-
-// https://osf.io/
-// API url at https://api.osf.io/v2/nodes/
-#[derive(Debug)]
-pub struct OSF {
-    client: Client,
-}
-
-impl OSF {
-    pub fn new(client: Client) -> Self {
-        OSF { client }
-    }
-}
-
-#[async_trait]
-impl Repository for OSF {
-    async fn list(&self, dir: DirMeta) -> anyhow::Result<Vec<Entry>> {
-        let resp: JsonValue = self
-            .client
-            .get(dir.api_url)
-            .send()
-            .await?
-            .error_for_status()?
-            .json()
-            .await?;
-        let files = resp
-            .get("data")
-            .and_then(JsonValue::as_array)
-            .ok_or_else(|| anyhow!("data not resolve to an array"))?;
-
-        let mut entries = Vec::with_capacity(files.len());
-        for filej in files {
-            let name: String = json_get(filej, "attributes.name")?;
-            let kind: String = json_get(filej, "attributes.kind")?;
-            match kind.as_ref() {
-                "file" => {
-                    let size: u64 = json_get(filej, "attributes.size")?;
-                    let download_link: String = json_get(filej, "links.download")?;
-                    let download_link = Url::from_str(&download_link)?;
-                    let hash: String = json_get(filej, "attributes.extra.hashes.sha256")?;
-                    let checksum = Checksum::Sha256(hash);
-                    let file = FileMeta {
-                        path: dir.path.join(&name),
-                        download_url: download_link,
-                        size: Some(size),
-                        checksum: vec![checksum],
-                    };
-                    entries.push(Entry::File(file));
-                }
-                "folder" => {
-                    let rel_path = dir.path.join(&name);
-                    let link: String = json_get(filej, "relationships.files.links.related.href")?;
-                    let link = Url::from_str(&link)?;
-                    let dir = DirMeta {
-                        path: rel_path,
-                        api_url: link,
-                    };
-                    entries.push(Entry::Dir(dir));
-                }
-                _ => Err(anyhow::anyhow!("kind is not 'file' or 'folder'"))?,
-            }
-        }
-
-        Ok(entries)
-    }
 }
