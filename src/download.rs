@@ -7,7 +7,7 @@ use std::{fs, path::Path, sync::Arc};
 use tokio::{fs::OpenOptions, io::AsyncWriteExt};
 use tracing::{info, instrument};
 
-use crate::{Checksum, DirMeta, Entry, Hasher, Repository, crawl};
+use crate::{Checksum, DirMeta, Entry, Hasher, crawl, dispatch::QueryRepository};
 
 // // must be very efficient, both CPU and RAM usage.
 // // [x] need async,
@@ -163,25 +163,26 @@ where
 ///
 /// * `R` is A repository implementation providing file metadata, URLs, and an HTTP client.
 /// * `P` is A path-like type specifying the destination directory.
-pub async fn download_with_validation<R, P>(
-    repo: Arc<R>,
-    id: &str,
+pub async fn download_with_validation<P>(
+    client: &Client,
+    query_repo: QueryRepository,
     dst_dir: P,
 ) -> anyhow::Result<()>
 where
     P: AsRef<Path>,
-    R: Repository + Send + Sync + 'static,
+    // R: Repository + Send + Sync + 'static,
 {
     // TODO: deal with zip differently according to input instruction
 
-    let root_dir = DirMeta::new_root(repo.as_ref().root_url(id));
+    let repo = query_repo.repo;
+    let record_id = query_repo.record_id;
+    let root_dir = DirMeta::new_root(repo.as_ref().root_url(&record_id));
     let path = dst_dir.as_ref().join(root_dir.relative());
     fs::create_dir_all(path)?;
-    crawl(repo.clone(), root_dir)
+    crawl(client.clone(), Arc::clone(&repo), root_dir)
         .try_for_each_concurrent(10, |entry| {
             let dst_dir = dst_dir.as_ref().to_path_buf();
-            let client = repo.client();
-            async move { download_file_with_validation(&client, entry, &dst_dir).await }
+            async move { download_file_with_validation(client, entry, &dst_dir).await }
         })
         .await?;
     Ok(())

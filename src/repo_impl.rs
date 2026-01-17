@@ -13,14 +13,12 @@ use crate::{Checksum, DirMeta, Entry, Repository, json_get, repo::FileMeta};
 // https://osf.io/
 // API root url at https://api.osf.io/v2/nodes/
 #[derive(Debug)]
-pub struct OSF {
-    client: Client,
-}
+pub struct OSF;
 
 impl OSF {
     #[must_use]
-    pub fn new(client: Client) -> Self {
-        OSF { client }
+    pub fn new() -> Self {
+        OSF
     }
 }
 
@@ -37,13 +35,8 @@ impl Repository for OSF {
         url
     }
 
-    fn client(&self) -> Client {
-        self.client.clone()
-    }
-
-    async fn list(&self, dir: DirMeta) -> anyhow::Result<Vec<Entry>> {
-        let resp: JsonValue = self
-            .client
+    async fn list(&self, client: &Client, dir: DirMeta) -> anyhow::Result<Vec<Entry>> {
+        let resp: JsonValue = client
             .get(dir.api_url.clone())
             .send()
             .await?
@@ -88,19 +81,14 @@ impl Repository for OSF {
 // https://datavers.example/api/datasets/:persistentId/versions/:latest-poblished/?persistentId=<id>
 #[derive(Debug)]
 pub struct DataverseDataset {
-    client: Client,
     base_url: Url,
     version: String,
 }
 
 impl DataverseDataset {
     #[must_use]
-    pub fn new(client: Client, base_url: Url, version: String) -> Self {
-        DataverseDataset {
-            client,
-            base_url,
-            version,
-        }
+    pub fn new(base_url: Url, version: String) -> Self {
+        DataverseDataset { base_url, version }
     }
 }
 
@@ -126,13 +114,8 @@ impl Repository for DataverseDataset {
         url
     }
 
-    fn client(&self) -> Client {
-        self.client.clone()
-    }
-
-    async fn list(&self, dir: DirMeta) -> anyhow::Result<Vec<Entry>> {
-        let resp: JsonValue = self
-            .client
+    async fn list(&self, client: &Client, dir: DirMeta) -> anyhow::Result<Vec<Entry>> {
+        let resp: JsonValue = client
             .get(dir.api_url.clone())
             .header(reqwest::header::ACCEPT, "application/json")
             .send()
@@ -169,19 +152,14 @@ impl Repository for DataverseDataset {
 // https://datavers.example/api/files/:persistentId/versions/:latest-published/?persistentId=<id>
 #[derive(Debug)]
 pub struct DataverseFile {
-    client: Client,
     base_url: Url,
     version: String,
 }
 
 impl DataverseFile {
     #[must_use]
-    pub fn new(client: Client, base_url: Url, version: String) -> Self {
-        DataverseFile {
-            client,
-            base_url,
-            version,
-        }
+    pub fn new(base_url: Url, version: String) -> Self {
+        DataverseFile { base_url, version }
     }
 }
 
@@ -207,13 +185,8 @@ impl Repository for DataverseFile {
         url
     }
 
-    fn client(&self) -> Client {
-        self.client.clone()
-    }
-
-    async fn list(&self, dir: DirMeta) -> anyhow::Result<Vec<Entry>> {
-        let resp: JsonValue = self
-            .client
+    async fn list(&self, client: &Client, dir: DirMeta) -> anyhow::Result<Vec<Entry>> {
+        let resp: JsonValue = client
             .get(dir.api_url.clone())
             .header(reqwest::header::ACCEPT, "application/json")
             .send()

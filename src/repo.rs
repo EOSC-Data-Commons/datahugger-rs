@@ -207,25 +207,29 @@ pub enum Checksum {
 }
 
 #[async_trait]
-pub trait Repository {
-    async fn list(&self, dir: DirMeta) -> anyhow::Result<Vec<Entry>>;
+pub trait Repository: Send + Sync {
+    async fn list(&self, client: &Client, dir: DirMeta) -> anyhow::Result<Vec<Entry>>;
     fn root_url(&self, id: &str) -> Url;
-    fn client(&self) -> Client;
 }
 
-pub fn crawl<R>(repo: Arc<R>, dir: DirMeta) -> BoxStream<'static, anyhow::Result<Entry>>
+pub fn crawl<R>(
+    client: Client,
+    repo: Arc<R>,
+    dir: DirMeta,
+) -> BoxStream<'static, anyhow::Result<Entry>>
 where
-    R: Repository + Send + Sync + 'static,
+    R: Repository + 'static + ?Sized,
 {
     Box::pin(try_stream! {
-        let entries = repo.list(dir).await?;
+        let entries = repo.list(&client, dir).await?;
 
         for entry in entries {
             match entry {
                 Entry::File(f) => yield Entry::File(f),
                 Entry::Dir(sub_dir) => {
                     yield Entry::Dir(sub_dir.clone());
-                    let sub_stream = crawl(Arc::clone(&repo), sub_dir);
+                    let client = client.clone();
+                    let sub_stream = crawl(client, Arc::clone(&repo), sub_dir);
                     for await item in sub_stream {
                         yield item?;
                     }
