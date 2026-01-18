@@ -123,15 +123,14 @@ static DATAVERSE_DOMAINS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     ])
 });
 
-// TODO: rename QueryRepository -> Dataset?
-pub struct QueryRepository {
+pub struct RepositoryRecord {
     pub repo: Arc<dyn Repository>,
     pub record_id: String,
 }
 
 /// # Errors
 /// ???
-pub fn resolve(url: &str) -> Result<QueryRepository, Exn<DispatchError>> {
+pub fn resolve(url: &str) -> Result<RepositoryRecord, Exn<DispatchError>> {
     let url = Url::from_str(url).or_raise(|| DispatchError {
         message: format!("'{url}' not a valid url"),
     })?;
@@ -177,7 +176,7 @@ pub fn resolve(url: &str) -> Result<QueryRepository, Exn<DispatchError>> {
         match typ {
             "dataset" => {
                 let repo = Arc::new(DataverseDataset::new(base_url, version));
-                let repo_query = QueryRepository {
+                let repo_query = RepositoryRecord {
                     repo,
                     record_id: id.to_string(),
                 };
@@ -185,7 +184,7 @@ pub fn resolve(url: &str) -> Result<QueryRepository, Exn<DispatchError>> {
             }
             "file" => {
                 let repo = Arc::new(DataverseFile::new(base_url, version));
-                let repo_query = QueryRepository {
+                let repo_query = RepositoryRecord {
                     repo,
                     record_id: id.to_string(),
                 };
@@ -213,7 +212,7 @@ pub fn resolve(url: &str) -> Result<QueryRepository, Exn<DispatchError>> {
             })?;
 
             let repo = Arc::new(OSF::new());
-            let repo_query = QueryRepository {
+            let repo_query = RepositoryRecord {
                 repo,
                 record_id: id.to_string(),
             };

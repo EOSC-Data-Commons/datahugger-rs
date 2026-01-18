@@ -8,7 +8,7 @@ use tokio::{fs::OpenOptions, io::AsyncWriteExt};
 use tracing::{info, instrument};
 
 use crate::{
-    Checksum, DirMeta, Entry, Hasher, crawl, dispatch::QueryRepository, error::ErrorStatus,
+    Checksum, DirMeta, Entry, Hasher, crawl, dispatch::RepositoryRecord, error::ErrorStatus,
     repo::CrawlerError,
 };
 
@@ -208,7 +208,7 @@ where
 /// * `P` is A path-like type specifying the destination directory.
 pub async fn download_with_validation<P>(
     client: &Client,
-    query_repo: QueryRepository,
+    record: RepositoryRecord,
     dst_dir: P,
 ) -> Result<(), Exn<CrawlerError>>
 // TODO: use DownloadError
@@ -217,8 +217,8 @@ where
 {
     // TODO: deal with zip differently according to input instruction
 
-    let repo = query_repo.repo;
-    let record_id = query_repo.record_id;
+    let repo = record.repo;
+    let record_id = record.record_id;
     let root_dir = DirMeta::new_root(repo.as_ref().root_url(&record_id));
     let path = dst_dir.as_ref().join(root_dir.relative());
     fs::create_dir_all(path.as_path()).or_raise(|| CrawlerError {
@@ -233,7 +233,7 @@ where
         })
         .await
         .or_raise(|| CrawlerError {
-            message: "".to_string(),
+            message: "crawl, download and validation failed".to_string(),
             status: ErrorStatus::Permanent,
         })?;
     Ok(())

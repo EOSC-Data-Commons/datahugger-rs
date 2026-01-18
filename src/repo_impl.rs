@@ -152,7 +152,6 @@ impl Repository for OSF {
 
 // https://datavers.example/api/datasets/:persistentId/versions/:latest-poblished/?persistentId=<id>
 #[derive(Debug)]
-// TODO: rename to Dataverse
 pub struct DataverseDataset {
     base_url: Url,
     version: String,

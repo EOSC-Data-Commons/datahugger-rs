@@ -16,6 +16,6 @@ mod download;
 pub use crate::download::download_with_validation;
 
 mod dispatch;
-pub use crate::dispatch::{QueryRepository, resolve};
+pub use crate::dispatch::{RepositoryRecord, resolve};
 
 pub mod error;

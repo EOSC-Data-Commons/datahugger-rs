@@ -19,6 +19,7 @@ before public and 1st release
 - [ ] seamephor, config that can intuitively estimate maximum resources been used.
 - [ ] do benchs to show its power.
 - [ ] compact but extremly expressive readme
+- [ ] use this to build a fairicat converter service to dogfooding.
 
 ## bench
 
