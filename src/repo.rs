@@ -191,9 +191,16 @@ impl DirMeta {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Endpoint {
+    pub parent_url: Url,
+    pub key: Option<String>,
+}
+
 #[derive(Debug)]
 pub struct FileMeta {
     path: CrawlPath,
+    endpoint: Endpoint,
     pub download_url: Url,
     pub size: Option<u64>,
     pub checksum: Vec<Checksum>,
@@ -202,12 +209,14 @@ pub struct FileMeta {
 impl FileMeta {
     pub fn new(
         path: CrawlPath,
+        endpoint: Endpoint,
         download_url: Url,
         size: Option<u64>,
         checksum: Vec<Checksum>,
     ) -> Self {
         FileMeta {
             path,
+            endpoint,
             download_url,
             size,
             checksum,
@@ -215,6 +224,9 @@ impl FileMeta {
     }
     pub fn relative(&self) -> CrawlPath {
         self.path.relative()
+    }
+    pub fn endpoint(&self) -> Endpoint {
+        self.endpoint.clone()
     }
 }
 

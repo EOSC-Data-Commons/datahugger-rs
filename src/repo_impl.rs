@@ -10,7 +10,7 @@ use std::{any::Any, str::FromStr};
 
 use crate::{
     Checksum, DirMeta, Entry, Repository, json_extract,
-    repo::{FileMeta, RepoError},
+    repo::{Endpoint, FileMeta, RepoError},
 };
 
 // https://osf.io/
@@ -68,7 +68,7 @@ impl Repository for OSF {
             },
         })?;
         let resp: JsonValue = resp.json().await.or_raise(|| RepoError {
-            message: "".to_string(),
+            message: format!("fail GET {}, unable to convert to json", dir.api_url,),
         })?;
         let files = resp
             .get("data")
@@ -78,7 +78,11 @@ impl Repository for OSF {
             })?;
 
         let mut entries = Vec::with_capacity(files.len());
-        for filej in files {
+        for (idx, filej) in files.iter().enumerate() {
+            let endpoint = Endpoint {
+                parent_url: dir.api_url.clone(),
+                key: Some(format!("data.{idx}")),
+            };
             let name: String = json_extract(filej, "attributes.name").or_raise(|| RepoError {
                 message: "fail to extracting 'attributes.name' as String from json".to_string(),
             })?;
@@ -106,8 +110,13 @@ impl Repository for OSF {
                                 .to_string(),
                         })?;
                     let checksum = Checksum::Sha256(hash);
-                    let file =
-                        FileMeta::new(dir.join(&name), download_url, Some(size), vec![checksum]);
+                    let file = FileMeta::new(
+                        dir.join(&name),
+                        endpoint,
+                        download_url,
+                        Some(size),
+                        vec![checksum],
+                    );
                     entries.push(Entry::File(file));
                 }
                 "folder" => {
@@ -202,7 +211,7 @@ impl Repository for DataverseDataset {
             },
         })?;
         let resp: JsonValue = resp.json().await.or_raise(|| RepoError {
-            message: "".to_string(),
+            message: format!("fail GET {}, unable to convert to json", dir.api_url,),
         })?;
 
         let files = resp
@@ -214,7 +223,11 @@ impl Repository for DataverseDataset {
             })?;
 
         let mut entries = Vec::with_capacity(files.len());
-        for filej in files {
+        for (idx, filej) in files.iter().enumerate() {
+            let endpoint = Endpoint {
+                parent_url: dir.api_url.clone(),
+                key: Some(format!("data.files.{idx}")),
+            };
             let name: String = json_extract(filej, "dataFile.filename").or_raise(|| RepoError {
                 message: "fail to extracting 'dataFile.filename' as String from json".to_string(),
             })?;
@@ -236,7 +249,13 @@ impl Repository for DataverseDataset {
                 message: "fail to extracting 'dataFile.md5' as String from json".to_string(),
             })?;
             let checksum = Checksum::Md5(hash);
-            let file = FileMeta::new(dir.join(&name), download_url, Some(size), vec![checksum]);
+            let file = FileMeta::new(
+                dir.join(&name),
+                endpoint,
+                download_url,
+                Some(size),
+                vec![checksum],
+            );
             entries.push(Entry::File(file));
         }
 
@@ -308,7 +327,7 @@ impl Repository for DataverseFile {
             },
         })?;
         let resp: JsonValue = resp.json().await.or_raise(|| RepoError {
-            message: "".to_string(),
+            message: format!("fail GET {}, unable to convert to json", dir.api_url,),
         })?;
 
         let filej = resp.get("data").ok_or_else(|| RepoError {
@@ -337,7 +356,17 @@ impl Repository for DataverseFile {
             message: "fail to extracting 'dataFile.md5' as String from json".to_string(),
         })?;
         let checksum = Checksum::Md5(hash);
-        let file = FileMeta::new(dir.join(&name), download_url, Some(size), vec![checksum]);
+        let endpoint = Endpoint {
+            parent_url: dir.api_url.clone(),
+            key: Some("data".to_string()),
+        };
+        let file = FileMeta::new(
+            dir.join(&name),
+            endpoint,
+            download_url,
+            Some(size),
+            vec![checksum],
+        );
         let entries = vec![Entry::File(file)];
 
         Ok(entries)
