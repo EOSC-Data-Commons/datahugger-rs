@@ -74,6 +74,12 @@ impl CrawlPath {
         CrawlPath(new_path)
     }
 
+    /// convert to &str
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
     /// Returns the root crawl path.
     ///
     /// The root path is represented internally using a special marker and is

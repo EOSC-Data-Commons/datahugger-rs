@@ -1,5 +1,6 @@
 use exn::{Exn, ResultExt};
 use futures_core::stream::BoxStream;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use reqwest::Client;
 
 use async_stream::try_stream;
@@ -21,10 +22,13 @@ impl std::fmt::Display for CrawlerError {
 
 impl std::error::Error for CrawlerError {}
 
+/// # Panics
+/// indicatif template error
 pub fn crawl<R>(
     client: Client,
     repo: Arc<R>,
     dir: DirMeta,
+    mp: MultiProgress,
 ) -> BoxStream<'static, Result<Entry, Exn<CrawlerError>>>
 where
     R: Repository + 'static + ?Sized,
@@ -40,12 +44,22 @@ where
                 })?;
 
         for entry in entries {
+            let pb = mp.insert(0, ProgressBar::new_spinner());
+            pb.set_style(
+                ProgressStyle::with_template("{spinner:.green} {msg}")
+                    .expect("indicatif template error")
+            );
+            pb.enable_steady_tick(std::time::Duration::from_millis(100));
             match entry {
-                Entry::File(f) => yield Entry::File(f),
+                Entry::File(f) => {
+                    pb.set_message(format!("Crawling {}...", f.relative()));
+                    yield Entry::File(f)
+                }
                 Entry::Dir(sub_dir) => {
+                    pb.set_message(format!("Crawling {}...", sub_dir.relative()));
                     yield Entry::Dir(sub_dir.clone());
                     let client = client.clone();
-                    let sub_stream = crawl(client, Arc::clone(&repo), sub_dir);
+                    let sub_stream = crawl(client, Arc::clone(&repo), sub_dir, mp.clone());
                     for await item in sub_stream {
                         yield item?;
                     }

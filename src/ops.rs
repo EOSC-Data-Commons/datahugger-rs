@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use exn::{Exn, ResultExt};
 use futures_util::{StreamExt, TryStreamExt};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use std::sync::Arc;
 
 use reqwest::Client;
@@ -11,7 +12,7 @@ use bytes::Buf;
 use digest::Digest;
 use std::{fs, path::Path};
 use tokio::{fs::OpenOptions, io::AsyncWriteExt};
-use tracing::{info, instrument};
+use tracing::{debug, instrument};
 
 use crate::{Checksum, Hasher};
 
@@ -19,9 +20,13 @@ impl RepositoryRecord {
     /// crawling and print the metadata of dirs and files
     /// # Errors
     /// when crawl fails
-    pub async fn print_meta(&self, client: &Client) -> Result<(), Exn<CrawlerError>> {
+    pub async fn print_meta(
+        &self,
+        client: &Client,
+        mp: MultiProgress,
+    ) -> Result<(), Exn<CrawlerError>> {
         let root_dir = self.root_dir();
-        crawl(client.clone(), Arc::clone(&self.repo), root_dir)
+        crawl(client.clone(), Arc::clone(&self.repo), root_dir, mp)
             .try_for_each_concurrent(10, |entry| async move {
                 match entry {
                     Entry::Dir(dir_meta) => {
@@ -75,16 +80,18 @@ impl RepositoryRecord {
 //     Ok(())
 // }
 
+#[allow(clippy::too_many_lines)]
 #[instrument(skip(client))]
 async fn download_crawled_file_with_validation<P>(
     client: &Client,
     src: Entry,
     dst: P,
+    mp: MultiProgress,
 ) -> Result<(), Exn<CrawlerError>>
 where
     P: AsRef<Path> + std::fmt::Debug,
 {
-    info!("downloading with validating");
+    debug!("downloading with validating");
     match src {
         Entry::Dir(dir_meta) => {
             let path = dst.as_ref().join(dir_meta.relative());
@@ -144,6 +151,17 @@ where
             })?;
             let mut got_size = 0;
 
+            let style = ProgressStyle::with_template(
+                "{msg:<60} [{bar:40.cyan/blue}] \
+                 {decimal_bytes:>8}/{decimal_total_bytes:>8} \
+                 ({decimal_bytes_per_sec:>12}, {eta:>3})",
+            )
+            .unwrap()
+            .progress_chars("=>-");
+            let pb = mp.add(ProgressBar::new(expected_size));
+            pb.set_style(style);
+            pb.enable_steady_tick(std::time::Duration::from_millis(100));
+            pb.set_message(compact_path(file_meta.relative().as_str()));
             while let Some(item) = stream.next().await {
                 let mut bytes = item.or_raise(|| CrawlerError {
                     message: "reqwest error stream".to_string(),
@@ -151,14 +169,18 @@ where
                 })?;
                 let chunk = bytes.chunk();
                 hasher.update(chunk);
-                got_size += bytes.len() as u64;
+                let bytes_len = bytes.len() as u64;
+                got_size += bytes_len;
                 fh.write_all_buf(&mut bytes)
                     .await
                     .or_raise(|| CrawlerError {
                         message: "fail at writing to fs".to_string(),
                         status: ErrorStatus::Permanent,
                     })?;
+                pb.inc(bytes_len);
             }
+
+            pb.finish_and_clear();
 
             if got_size != expected_size {
                 exn::bail!(CrawlerError {
@@ -180,12 +202,42 @@ where
     }
 }
 
+fn compact_path(full_path: &str) -> String {
+    let path = Path::new(full_path);
+
+    // Get components
+    let mut comps: Vec<String> = path
+        .parent() // everything except the file name
+        .map(|p| {
+            p.components()
+                .map(|c| {
+                    let s = c.as_os_str().to_string_lossy();
+                    if s.is_empty() {
+                        String::new()
+                    } else {
+                        s.chars().next().unwrap().to_string()
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // Add base file name
+    if let Some(file_name) = path.file_name() {
+        comps.push(file_name.to_string_lossy().to_string());
+    }
+
+    // Join with slashes
+    comps.join("/")
+}
+
 #[async_trait]
 pub trait DownloadExt {
     async fn download_with_validation<P>(
         self,
         client: &Client,
         dst_dir: P,
+        mp: MultiProgress,
     ) -> Result<(), Exn<CrawlerError>>
     where
         P: AsRef<Path> + Sync + Send;
@@ -229,6 +281,7 @@ impl DownloadExt for RepositoryRecord {
         self,
         client: &Client,
         dst_dir: P,
+        mp: MultiProgress,
     ) -> Result<(), Exn<CrawlerError>>
     where
         P: AsRef<Path> + Sync + Send,
@@ -241,12 +294,13 @@ impl DownloadExt for RepositoryRecord {
             message: format!("cannot create dir at '{}'", path.display()),
             status: ErrorStatus::Permanent,
         })?;
-        // XXX: ? download_crawled_file_with_validation return its own error type?? can I?
-        crawl(client.clone(), Arc::clone(&self.repo), root_dir)
-            .try_for_each_concurrent(10, |entry| {
+        crawl(client.clone(), Arc::clone(&self.repo), root_dir, mp.clone())
+            // NOTE: limit set to 20 for polite crawling, it limit the stream consumer rate.
+            .try_for_each_concurrent(20, |entry| {
                 let dst_dir = dst_dir.as_ref().to_path_buf();
+                let mp = mp.clone();
                 async move {
-                    download_crawled_file_with_validation(client, entry, &dst_dir).await?;
+                    download_crawled_file_with_validation(client, entry, &dst_dir, mp).await?;
                     Ok(())
                 }
             })

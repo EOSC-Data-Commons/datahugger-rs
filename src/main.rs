@@ -1,6 +1,7 @@
-use datahugger::resolve;
 use datahugger::DownloadExt;
+use datahugger::resolve;
 use futures_util::future::join_all;
+use indicatif::MultiProgress;
 use reqwest::ClientBuilder;
 use tracing_subscriber::FmtSubscriber;
 
@@ -32,8 +33,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let repos = [
         // in osf.io, '3ua2c' has many files and a large file (>600M)
         "https://osf.io/3ua2c/",
-        "https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/KBHLOD",
-        "https://dataverse.harvard.edu/file.xhtml?persistentId=doi:10.7910/DVN/KBHLOD/DHJ45U",
+        // "https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/KBHLOD",
+        // "https://dataverse.harvard.edu/file.xhtml?persistentId=doi:10.7910/DVN/KBHLOD/DHJ45U",
     ];
 
     let user_agent = format!("datahugger-rs-cli/{}", env!("CARGO_PKG_VERSION"));
@@ -50,11 +51,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
 
-            // repo.print_meta(&client).await
             // require:
             // use datahugger::DownloadExt;
-            repo.download_with_validation(&client, "./dummy_tests")
+            let mp = MultiProgress::new();
+            repo.download_with_validation(&client, "./dummy_tests", mp)
                 .await
+
+            // repo.print_meta(&client, mp).await
         }
     });
 
