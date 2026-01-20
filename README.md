@@ -31,6 +31,29 @@ o/f/m/a/Lynx rufus.pdf             [------------------------]      0 B/326.02 kB
 o/f/m/a/Ursus arctos.pdf           [------------------------]      0 B/319.05 kB (       0 B/s,  0s)
 ```
 
+### Python
+
+You can use it as a python library.
+
+```python
+from datahugger_ng import resolve
+
+```python
+record = resolve(
+    "https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/KBHLOD"
+)
+record.download_with_validation(tmp_path)
+assert sorted([i.name for i in tmp_path.iterdir()]) == [
+    "ECM_matrix.py",
+    "Markov_comp.py",
+    "Markov_learning.py",
+    "tutorial1.py",
+    "tutorial2.py",
+    "tutorial3.py",
+    "tutorial4.py",
+]
+```
+
 ## License
 
 All contributions must retain this attribution.
