@@ -1,39 +1,42 @@
-# datahugger-rs
+# datahugger
 
-- keep folder hierachy.
-- async
-- zero-copy
-- direct streaming to dst.
-- one go checksum validation
+Tool for fetching data from DOI or URL.
 
-## roadmap
+Support data repositories:
 
-before public and 1st release
+- [dataverse](https://dataverse.org/) (click [here](https://github.com/EOSC-Data-Commons/datahugger-rs/blob/master/dataverse-repo-list.md) to see all dataverse data repositories we support).
+- [osf.io](https://osf.io/)
 
-- [ ] all repos that already supported by py-datahugger
-- [ ] onedata support.
-- [ ] one eosc target data repo support that not include in original py-datahugger
-- [ ] python bindings
-- [ ] cli that can do all py-datahugger do.
-- [ ] not only download, but a versatile metadata fetcher
-- [ ] not only local FS, but s3
-- [ ] seamephor, config that can intuitively estimate maximum resources been used.
-- [ ] do benchs to show its power.
-- [ ] compact but extremly expressive readme
-- [ ] use this to build a fairicat converter service to dogfooding.
+## Usage
 
-## bench
+### CLI
 
-- [ ] with/without after download checksum validation
-- [ ] dataset with large files.
-- [ ] dataset with ~100 files.
-- [ ] full download on a real data repo.
-- [ ] every bench test run for two types: pure cli call and wrapped python api 
+download the binary or brew, apt, curl..
 
-## notes
+To download all data from a database, run:
 
-- [ ] maybe add support to windows, it is not now because CrawlPath is using '/'.
-- [ ] minimize the maintenance effort by having auto remove data repo validation and fire issues.
-- [ ] happing above auto validation and publish the result in the gh-page.
-- [ ] have clear data repo onboarding instruction (one trait to impl).
-- [ ] have clear new data repo request issue template.
+```console
+datahugger download https://osf.io/3ua2c/
+```
+
+```console
+⠉ Crawling osfstorage/final_model_results_combined/single_species_models_final/niche_additive/Procyon lotor_2025-05-09.rdata...
+⠲ Crawling osfstorage/final_model_results_combined/single_species_models_final/niche_additive...
+⠈ Crawling osfstorage/final_model_results_combined/single_species_models_final...
+⠒ Crawling osfstorage/final_model_results_combined...
+⠐ Crawling osfstorage...
+o/f/c/event-cbg-intersection.csv                             [==>-------------------------------------] 47.20 MB/688.21 MB (   4.92 MB/s,  2m)
+o/i/size_intra_ind_int_rs_mod_2025-06-20.rdata               [================>-----------------------] 44.01 MB/107.09 MB (   4.45 MB/s, 14s)
+o/i/niche_intra_ind_int_rs_mod_2025-06-21.rdata              [==============>-------------------------] 38.84 MB/108.41 MB (   4.52 MB/s, 15s)
+o/f/m/a/Corvus corax.pdf                                     [=========>------------------------------] 80.47 kB/329.85 kB ( 438.28 kB/s,  1s)
+o/f/m/a/Lynx rufus.pdf                                       [----------------------------------------]      0 B/326.02 kB (       0 B/s,  0s)
+o/f/m/a/Ursus arctos.pdf                                     [----------------------------------------]      0 B/319.05 kB (       0 B/s,  0s)
+```
+
+## License
+
+All contributions must retain this attribution.
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+
