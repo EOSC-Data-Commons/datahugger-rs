@@ -25,12 +25,10 @@ datahugger download https://osf.io/3ua2c/
 ⠈ Crawling osfstorage/final_model_results_combined/single_species_models_final...
 ⠒ Crawling osfstorage/final_model_results_combined...
 ⠐ Crawling osfstorage...
-o/f/c/event-cbg-intersection.csv                             [==>-------------------------------------] 47.20 MB/688.21 MB (   4.92 MB/s,  2m)
-o/i/size_intra_ind_int_rs_mod_2025-06-20.rdata               [================>-----------------------] 44.01 MB/107.09 MB (   4.45 MB/s, 14s)
-o/i/niche_intra_ind_int_rs_mod_2025-06-21.rdata              [==============>-------------------------] 38.84 MB/108.41 MB (   4.52 MB/s, 15s)
-o/f/m/a/Corvus corax.pdf                                     [=========>------------------------------] 80.47 kB/329.85 kB ( 438.28 kB/s,  1s)
-o/f/m/a/Lynx rufus.pdf                                       [----------------------------------------]      0 B/326.02 kB (       0 B/s,  0s)
-o/f/m/a/Ursus arctos.pdf                                     [----------------------------------------]      0 B/319.05 kB (       0 B/s,  0s)
+o/f/c/event-cbg-intersection.csv   [==>---------------------] 47.20 MB/688.21 MB (   4.92 MB/s,  2m)
+o/f/m/a/Corvus corax.pdf           [=======>----------------] 80.47 kB/329.85 kB ( 438.28 kB/s,  1s)
+o/f/m/a/Lynx rufus.pdf             [------------------------]      0 B/326.02 kB (       0 B/s,  0s)
+o/f/m/a/Ursus arctos.pdf           [------------------------]      0 B/319.05 kB (       0 B/s,  0s)
 ```
 
 ## License
