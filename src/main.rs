@@ -1,26 +1,33 @@
-use datahugger::DownloadExt;
-use datahugger::resolve;
-use futures_util::future::join_all;
+use clap::{Args, Parser, Subcommand};
+use datahugger::{DownloadExt, resolve};
 use indicatif::MultiProgress;
 use reqwest::ClientBuilder;
 use tracing_subscriber::FmtSubscriber;
 
-// #[derive(Debug)]
-// enum AppError {
-//     Fatal { consequences: &'static str },
-//     // Trivial,
-// }
-//
-// impl std::fmt::Display for AppError {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match self {
-//             AppError::Fatal { consequences } => write!(f, "fatal error: {consequences}"),
-//             // AppError::Trivial => write!(f, "trivial error"),
-//         }
-//     }
-// }
-//
-// impl std::error::Error for AppError {}
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+#[command(propagate_version = true)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// download subcommand
+    Download(DownloadArgs),
+}
+
+#[derive(Args)]
+struct DownloadArgs {
+    /// Url of the data record to download
+    url: String,
+
+    /// Upper limit for concurency to avaid overwhelming the network or filesystem, default to `0`
+    /// which means no limitation, and it is usually fine for single dataset record.
+    #[arg(short, long, default_value_t = 0)]
+    limit: usize,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -30,43 +37,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .finish();
 
     tracing::subscriber::set_global_default(subscriber)?;
-    let repos = [
-        // in osf.io, '3ua2c' has many files and a large file (>600M)
-        "https://osf.io/3ua2c/",
-        // "https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/KBHLOD",
-        // "https://dataverse.harvard.edu/file.xhtml?persistentId=doi:10.7910/DVN/KBHLOD/DHJ45U",
-    ];
 
-    let user_agent = format!("datahugger-rs-cli/{}", env!("CARGO_PKG_VERSION"));
-    let client = ClientBuilder::new().user_agent(user_agent).build()?;
-    let futures = repos.into_iter().map(|repo| {
-        let client = client.clone();
-
-        async move {
-            let repo = match resolve(repo) {
+    // in osf.io, '3ua2c' has many files and a large file (>600M)
+    // "https://osf.io/3ua2c/",
+    // "https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/KBHLOD",
+    // "https://dataverse.harvard.edu/file.xhtml?persistentId=doi:10.7910/DVN/KBHLOD/DHJ45U",
+    let cli = Cli::parse();
+    match &cli.command {
+        Commands::Download(args) => {
+            let url = &args.url;
+            let user_agent = format!("datahugger-cli/{}", env!("CARGO_PKG_VERSION"));
+            let client = ClientBuilder::new().user_agent(user_agent).build()?;
+            let repo = match resolve(url) {
                 Ok(repo) => repo,
                 Err(err) => {
-                    eprintln!("failed to resolve '{repo}': {err:?}");
+                    eprintln!("failed to resolve '{url}': {err:?}");
                     std::process::exit(1);
                 }
             };
 
-            // require:
-            // use datahugger::DownloadExt;
             let mp = MultiProgress::new();
-            repo.download_with_validation(&client, "./dummy_tests", mp)
+            repo.download_with_validation(&client, "./dummy_tests", mp, args.limit)
                 .await
-
-            // repo.print_meta(&client, mp).await
-        }
-    });
-
-    let results = join_all(futures).await;
-
-    for result in results {
-        if let Err(err) = result {
-            eprintln!("{err:?}");
+                .map_err(|err| {
+                    eprintln!("download failed: {err:?}");
+                    std::process::exit(1);
+                });
         }
     }
+
     Ok(())
 }

@@ -238,6 +238,7 @@ pub trait DownloadExt {
         client: &Client,
         dst_dir: P,
         mp: MultiProgress,
+        limit: usize,
     ) -> Result<(), Exn<CrawlerError>>
     where
         P: AsRef<Path> + Sync + Send;
@@ -282,6 +283,7 @@ impl DownloadExt for RepositoryRecord {
         client: &Client,
         dst_dir: P,
         mp: MultiProgress,
+        limit: usize,
     ) -> Result<(), Exn<CrawlerError>>
     where
         P: AsRef<Path> + Sync + Send,
@@ -295,8 +297,9 @@ impl DownloadExt for RepositoryRecord {
             status: ErrorStatus::Permanent,
         })?;
         crawl(client.clone(), Arc::clone(&self.repo), root_dir, mp.clone())
-            // NOTE: limit set to 20 for polite crawling, it limit the stream consumer rate.
-            .try_for_each_concurrent(20, |entry| {
+            // NOTE: limit set to 0 as default for cli download,
+            // should set to 20 for polite crawling for every dataset, it limit the stream consumer rate.
+            .try_for_each_concurrent(limit, |entry| {
                 let dst_dir = dst_dir.as_ref().to_path_buf();
                 let mp = mp.clone();
                 async move {
