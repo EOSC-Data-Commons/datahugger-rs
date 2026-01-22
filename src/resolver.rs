@@ -1,11 +1,17 @@
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use exn::{Exn, OptionExt, ResultExt};
+use reqwest::{
+    header::{HeaderMap, HeaderValue, AUTHORIZATION, USER_AGENT},
+    ClientBuilder,
+};
+use serde_json::Value as JsonValue;
 use url::Url;
 
 use crate::{
+    json_extract,
     repo::RepositoryExt,
-    repo_impl::{Dataone, DataverseDataset, DataverseFile, OSF},
+    repo_impl::{Dataone, DataverseDataset, DataverseFile, GitHub, OSF},
     RepositoryRecord,
 };
 
@@ -124,9 +130,69 @@ static DATAVERSE_DOMAINS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     ])
 });
 
+// get default branch's commit
+// NOTE: this might reach rate limit as well, therefore need a client as parameter.
+async fn github_get_default_branch_commit(
+    owner: &str,
+    repo: &str,
+) -> Result<String, Exn<DispatchError>> {
+    // TODO: don't panic, and wrap client.get as client.get_json() to be used everywhere.
+    let user_agent = format!("datahugger-cli/{}", env!("CARGO_PKG_VERSION"));
+    let mut headers = HeaderMap::new();
+    if let Ok(token) = std::env::var("GITHUB_TOKEN") {
+        headers.insert(
+            AUTHORIZATION,
+            HeaderValue::from_str(&format!("token {token}")).unwrap(),
+        );
+    }
+    headers.insert(USER_AGENT, HeaderValue::from_str(&user_agent).unwrap());
+    let client = ClientBuilder::new()
+        .user_agent(&user_agent)
+        .default_headers(headers)
+        .use_native_tls()
+        .build()
+        .unwrap();
+    let repo_url = format!("https://api.github.com/repos/{owner}/{repo}");
+    let resp: JsonValue = client
+        .get(&repo_url)
+        .send()
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let default_branch: String =
+        json_extract(&resp, "default_branch").map_err(|_| DispatchError {
+            message: "not able to get default branch".to_string(),
+        })?;
+
+    let commits_url =
+        format!("https://api.github.com/repos/{owner}/{repo}/commits/{default_branch}");
+
+    let resp: JsonValue = client
+        .get(&commits_url)
+        .header("User-Agent", user_agent.clone())
+        .send()
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let commit_sha: String = json_extract(&resp, "sha").map_err(|_| DispatchError {
+        message: "not able to get default branch".to_string(),
+    })?;
+
+    Ok(commit_sha)
+}
+
 /// # Errors
 /// ???
-pub fn resolve(url: &str) -> Result<RepositoryRecord, Exn<DispatchError>> {
+#[allow(clippy::too_many_lines)]
+pub async fn resolve(url: &str) -> Result<RepositoryRecord, Exn<DispatchError>> {
     let url = Url::from_str(url).or_raise(|| DispatchError {
         message: format!("'{url}' not a valid url"),
     })?;
@@ -206,7 +272,30 @@ pub fn resolve(url: &str) -> Result<RepositoryRecord, Exn<DispatchError>> {
     match domain {
         "arxiv.org" => todo!(),
         "zenodo.org" => todo!(),
-        "github.com" => todo!(),
+        "github.com" => {
+            let mut segments = url.path_segments().ok_or_else(|| DispatchError {
+                message: format!("cannot get path segments of url '{}'", url.as_str()),
+            })?;
+
+            let owner = segments.next().ok_or_else(|| DispatchError {
+                message: format!("missing owner in url '{}'", url.as_str()),
+            })?;
+
+            let repo_name = segments.next().ok_or_else(|| DispatchError {
+                message: format!("missing repo in url '{}'", url.as_str()),
+            })?;
+
+            let record = if let Some(id) = segments.next().and_then(|_| segments.next()) {
+                let repo = Arc::new(GitHub::new(owner, repo_name));
+                repo.get_record(id)
+            } else {
+                let id = github_get_default_branch_commit(owner, repo_name).await?;
+                let repo = Arc::new(GitHub::new(owner, repo_name));
+                repo.get_record(&id)
+            };
+
+            Ok(record)
+        }
         "datadryad.org" => todo!(),
         "huggingface.co" => todo!(),
         "osf.io" => {
@@ -237,27 +326,27 @@ pub fn resolve(url: &str) -> Result<RepositoryRecord, Exn<DispatchError>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn test_resolve_dataverse_default() {
+    #[tokio::test]
+    async fn test_resolve_dataverse_default() {
         // dataset
         let url = "https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/KBHLOD";
-        let qr = resolve(url).unwrap();
+        let qr = resolve(url).await.unwrap();
         assert_eq!(qr.record_id.as_str(), "doi:10.7910/DVN/KBHLOD");
         qr.repo.as_any().downcast_ref::<DataverseDataset>().unwrap();
 
         // file
         let url =
             "https://dataverse.harvard.edu/file.xhtml?persistentId=doi:10.7910/DVN/KBHLOD/DHJ45U";
-        let qr = resolve(url).unwrap();
+        let qr = resolve(url).await.unwrap();
         assert_eq!(qr.record_id.as_str(), "doi:10.7910/DVN/KBHLOD/DHJ45U");
         qr.repo.as_any().downcast_ref::<DataverseFile>().unwrap();
     }
 
-    #[test]
-    fn test_resolve_default() {
+    #[tokio::test]
+    async fn test_resolve_default() {
         // osf.io
         for url in ["https://osf.io/dezms/overview", "https://osf.io/dezms/"] {
-            let qr = resolve(url).unwrap();
+            let qr = resolve(url).await.unwrap();
             assert_eq!(qr.record_id.as_str(), "dezms");
             qr.repo.as_any().downcast_ref::<OSF>().unwrap();
         }

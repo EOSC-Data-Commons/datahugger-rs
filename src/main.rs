@@ -1,7 +1,10 @@
 use clap::{Args, Parser, Subcommand};
 use datahugger::{resolve, DownloadExt};
 use indicatif::MultiProgress;
-use reqwest::ClientBuilder;
+use reqwest::{
+    header::{HeaderMap, HeaderValue, AUTHORIZATION, USER_AGENT},
+    ClientBuilder,
+};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 #[derive(Parser)]
@@ -49,11 +52,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Download(args) => {
             let url = &args.url;
             let user_agent = format!("datahugger-cli/{}", env!("CARGO_PKG_VERSION"));
+            let mut headers = HeaderMap::new();
+            if let Ok(token) = std::env::var("GITHUB_TOKEN") {
+                headers.insert(
+                    AUTHORIZATION,
+                    HeaderValue::from_str(&format!("token {token}"))?,
+                );
+            }
+            headers.insert(USER_AGENT, HeaderValue::from_str(&user_agent)?);
             let client = ClientBuilder::new()
                 .user_agent(user_agent)
+                .default_headers(headers)
                 .use_native_tls()
                 .build()?;
-            let repo = match resolve(url) {
+            let repo = match resolve(url).await {
                 Ok(repo) => repo,
                 Err(err) => {
                     eprintln!("failed to resolve '{url}': {err:?}");
