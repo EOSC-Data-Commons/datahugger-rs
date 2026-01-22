@@ -10,7 +10,7 @@ Support data repositories:
 | OSF           | https://osf.io/                  | — |
 | GitHub        | https://github.com/              | Use a GitHub API token to get a higher rate limit |
 | arXiv         | https://arxiv.org/               | — |
-| Dryad         | https://datadryad.org            | Requires a bearer token to download data ([API instructions](https://datadryad.org/api)) |
+| Dryad         | https://datadryad.org            | Bearer token required to download data (see [API instructions](https://datadryad.org/api) for how to your api key) |
 | DataONE       | https://www.dataone.org/         | [Supported DataONE repositories](https://github.com/EOSC-Data-Commons/datahugger-rs/blob/master/dataone-repo-list.md); requests to umbrella repositories may be slow |
 
 
@@ -60,6 +60,54 @@ assert sorted([i.name for i in tmp_path.iterdir()]) == [
     "tutorial4.py",
 ]
 ```
+
+## Examples
+
+### Github repo download
+
+...
+
+### Datadryad API key config and download
+
+...
+
+### Download for requests unlimited data repositories
+
+...
+
+## Roadmap 
+
+- [ ] all repos that already supported by py-datahugger
+    - [x] Dataone (the repos itself are verry slow in responding http request).
+    - [x] Github repo download (support folders collapse and download).
+    - [ ] zenodo 
+    - [x] datadryad
+    - [x] arxiv
+    - [ ] MendelyDataset
+    - [ ] HuggingFaceDataset
+    - [x] OSFDataset
+    - [x] Many Dataverse dataset  
+- [ ] compact but extremly expressive readme
+    - [ ] crate.io + python docs.
+    - [ ] a bit detail of data repo, shows if fairicat is support etc.
+    - [ ] at crate.io, show how to use generics to add new repos or new ops.
+- [ ] python binding (crawl function) that spit out a stream for async use in python side.
+- [ ] onedata support.
+- [ ] not only download, but a versatile metadata fetcher
+- [ ] one eosc target data repo support that not include in original py-datahugger
+- [ ] use this to build a fairicat converter service to dogfooding.
+- [x] python bindings
+- [x] cli that can do all py-datahugger do.
+- [ ] not only local FS, but s3 (using openDAL?)
+- [ ] seamephor, config that can intuitively estimate maximum resources been used (already partially taken care by for_each_concurrent limit).
+- [ ] do benchs to show its power.
+- [ ] suuports for less popular data repositories, implement when use cases coming (need your help!)
+    - [ ] FigShareDataset
+    - [ ] DSpaceDataset
+    - [ ] SeaNoeDataset
+    - [ ] PangaeaDataset
+    - [ ] B2ShareDataset
+    - [ ] DjehutyDataset
 
 ## License
 
