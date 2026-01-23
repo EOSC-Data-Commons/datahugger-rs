@@ -4,16 +4,16 @@ Tool for fetching data from DOI or URL.
 
 Support data repositories:
 
-| Source             | Website                         | Notes |
-|--------------------|---------------------------------|-------|
-| Dataverse          | [dataverse.org](https://dataverse.org/) | [Supported Dataverse repositories](https://github.com/EOSC-Data-Commons/datahugger-rs/blob/master/dataverse-repo-list.md) |
-| OSF                | [osf.io](https://osf.io/)       | — |
-| GitHub ✨(new)      | [github.com](https://github.com/) | Use a GitHub API token to get a higher rate limit |
-| Hugging Face ✨(new)| [huggingface.co](https://huggingface.co/) | — |
-| arXiv              | [arxiv.org](https://arxiv.org/) | — |
-| Zenodo             | [zenodo.org](https://zenodo.org/) | — |
-| Dryad              | [datadryad.org](https://datadryad.org/) | Bearer token required to download data (see [API instructions](https://datadryad.org/api) for obtaining your API key) |
-| DataONE            | [dataone.org](https://www.dataone.org/) | [Supported DataONE repositories](https://github.com/EOSC-Data-Commons/datahugger-rs/blob/master/dataone-repo-list.md); requests to umbrella repositories may be slow |
+| Source             | Website                         | Notes | Examples |
+|--------------------|---------------------------------|-------| ---------|
+| Dataverse          | [dataverse.org](https://dataverse.org/) | [Supported Dataverse repositories](https://github.com/EOSC-Data-Commons/datahugger-rs/blob/master/dataverse-repo-list.md) | [example](#repository-without-limitations) |
+| OSF                | [osf.io](https://osf.io/)       | — | [example](#repository-without-limitations) |
+| GitHub ✨(new)      | [github.com](https://github.com/) | Use a GitHub API token to get a higher rate limit | [example](#github---avoid-hitting-api-rate-limits-using-a-personal-access-token-pat) |
+| Hugging Face ✨(new)| [huggingface.co](https://huggingface.co/) | — | [example](#repository-without-limitations) |
+| arXiv              | [arxiv.org](https://arxiv.org/) | — | [example](#repository-without-limitations) |
+| Zenodo             | [zenodo.org](https://zenodo.org/) | — | [example](#repository-without-limitations) |
+| Dryad              | [datadryad.org](https://datadryad.org/) | Bearer token required to download data (see [API instructions](https://datadryad.org/api) for obtaining your API key) | [example](#datadryad-api-key-config-and-download) |
+| DataONE            | [dataone.org](https://www.dataone.org/) | [Supported DataONE repositories](https://github.com/EOSC-Data-Commons/datahugger-rs/blob/master/dataone-repo-list.md); requests to umbrella repositories may be slow | [example](#repository-without-limitations) |
 
 
 
@@ -82,23 +82,29 @@ Python SDK mainly for downstream python libraries to implement extra operations 
 To get higher rate limits, export your [GitHub PAT](https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api) before downloading:
 If you use `gh auth token` to get token if you use `gh` to login in CLI.
 
+https://github.com/EOSC-Data-Commons/datahugger-rs
+
 ```bash
 export GITHUB_TOKEN="your_personal_access_token" 
-datahugger download https://github.com/user/repo --to /tmp/github_download/
+datahugger download https://github.com/EOSC-Data-Commons/datahugger-rs --to /tmp/github_download/
 ```
 ### Datadryad API key config and download
 
 Datadryad requires a bearer token to access data. First, follow [API instructions](https://datadryad.org/api) to get your key.
 You need to have a dryad account and in your profile you can find your API secret, it by default expire in 10 hours.
 
+https://datadryad.org/dataset/doi:10.5061/dryad.mj8m0
+
 ```bash
 export DRYAD_API_KEY="your_api_key"
-datahugger download https://datadryad.org/stash/dataset/doi:10.5061/dryad.example --to /tmp/dryad_download/
+datahugger download https://datadryad.org/dataset/doi:10.5061/dryad.mj8m0 --to /tmp/dryad_download/
 ```
 
 ### Repository without limitations
 
 - Huggingface datasets - simple download
+
+https://huggingface.co/datasets/HuggingFaceFW/finepdfs
 
 ```bash
 datahugger download https://huggingface.co/datasets/HuggingFaceFW/finepdfs --to /tmp/hf_download/
@@ -106,36 +112,45 @@ datahugger download https://huggingface.co/datasets/HuggingFaceFW/finepdfs --to 
 
 - Dataverse - simple download
 
+https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/KBHLOD
+
 ```bash
-datahugger download https://dataverse.org/dataset.xhtml?persistentId=doi:10.7910/DVN/EXAMPLE --to /tmp/dataverse_download/
+datahugger download https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/KBHLOD --to /tmp/dataverse_download/
 ```
 
 - OSF - simple download
 
 ```bash
-datahugger download https://osf.io/abcd1234/ --to /tmp/osf_download/
+datahugger download https://osf.io/3ua2c --to /tmp/osf_download/ --limit 10
 ```
 
 - arXiv - simple download
 
+https://arxiv.org/abs/2101.00001v1
+
 ```bash
-datahugger download https://arxiv.org/src/2101.00001v1 --to /tmp/arxiv_download/
+datahugger download https://arxiv.org/abs/2101.00001v1 --to /tmp/arxiv_download/
 ```
 
 - Zenodo - simple download
 
+https://zenodo.org/records/17867222
+
 ```bash
-datahugger download https://zenodo.org/record/1234567 --to /tmp/zenodo_download/
+datahugger download https://zenodo.org/record/17867222 --to /tmp/zenodo_download/
 ```
 
 - DataONE - may be slow for umbrella repositories
 
+https://arcticdata.io/catalog/view/doi%3A10.18739%2FA2542JB2X
+
 ```bash
-datahugger download https://www.dataone.org/data/abcd1234 --to /tmp/dataone_download/
+datahugger download https://arcticdata.io/catalog/view/doi%3A10.18739%2FA2542JB2X --to /tmp/dataone_download/
 ```
 - Notes:
 
 - `--to /tmp/...` shows the **download target directory**.  
+- `--limit 10` limit the concurrency channel to do polite crawling and downloading.
 - Repositories with **rate limits or auth** are highlighted with PAT / API key instructions.  
 - Others can be downloaded directly without credentials.  
 
@@ -169,16 +184,17 @@ datahugger download https://www.dataone.org/data/abcd1234 --to /tmp/dataone_down
     - [ ] crate.io + python docs.
     - [ ] a bit detail of data repo, shows if fairicat is support etc.
     - [ ] at crate.io, show how to use generics to add new repos or new ops.
+- [ ] test python bindings in filemetrix/filefetcher.
 - [ ] doc on gh-pages?
 - [ ] python binding (crawl function) that spit out a stream for async use in python side.
 - [ ] python binding allow to set HTTP client from a config, or set a token etc.
 - [ ] zip extract support.
 - [ ] onedata support through signposting, fairicat?
 - [ ] not only download, but a versatile metadata fetcher
+- [ ] not only download, but scanning to get compute the file type using libmagic.
 - [x] one eosc target data repo support that not include in original py-datahugger (HAL?)
 - [ ] use this to build a fairicat converter service to dogfooding.
 - [x] python bindings
-- [ ] test python bindings in filemetrix/filefetcher.
 - [x] cli that can do all py-datahugger do.
 - [ ] not only local FS, but s3 (using openDAL?)
 - [ ] seamephor, config that can intuitively estimate maximum resources been used (already partially taken care by for_each_concurrent limit).

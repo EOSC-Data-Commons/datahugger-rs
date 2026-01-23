@@ -7,6 +7,8 @@
     pkgs.cargo-tarpaulin
     # installers
     pkgs.cargo-dist
+    # openssl
+    pkgs.openssl
   ];
 
   enterTest = ''
