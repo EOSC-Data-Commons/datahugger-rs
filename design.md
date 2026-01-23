@@ -10,18 +10,6 @@
 
 before public and 1st release
 
-- [ ] all repos that already supported by py-datahugger
-- [ ] onedata support.
-- [ ] one eosc target data repo support that not include in original py-datahugger
-- [x] python bindings
-- [x] cli that can do all py-datahugger do.
-- [ ] not only download, but a versatile metadata fetcher
-- [ ] not only local FS, but s3 (using openDAL?)
-- [ ] seamephor, config that can intuitively estimate maximum resources been used (already partially taken care by for_each_concurrent limit).
-- [ ] do benchs to show its power.
-- [ ] compact but extremly expressive readme
-- [ ] use this to build a fairicat converter service to dogfooding.
-
 ## bench
 
 - [ ] with/without after download checksum validation
@@ -32,7 +20,7 @@ before public and 1st release
 
 ## notes
 
-- [ ] maybe add support to windows, it is not now because CrawlPath is using '/'.
+- [x] maybe add support to windows, it is not now because CrawlPath is using '/'. (boundary is take care by Path)
 - [ ] minimize the maintenance effort by having auto remove data repo validation and fire issues.
 - [ ] happing above auto validation and publish the result in the gh-page.
 - [ ] have clear data repo onboarding instruction (one trait to impl).

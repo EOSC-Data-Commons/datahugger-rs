@@ -1,11 +1,20 @@
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 
-use exn::{Exn, ResultExt};
+use exn::{Exn, OptionExt, ResultExt};
+use reqwest::{
+    header::{HeaderMap, HeaderValue, AUTHORIZATION, USER_AGENT},
+    ClientBuilder,
+};
+use serde_json::Value as JsonValue;
 use url::Url;
 
 use crate::{
+    json_extract,
     repo::RepositoryExt,
-    repo_impl::{DataverseDataset, DataverseFile, OSF},
+    repo_impl::{
+        Arxiv, DataDryad, Dataone, DataverseDataset, DataverseFile, GitHub, HalScience,
+        HuggingFace, Zenodo, OSF,
+    },
     RepositoryRecord,
 };
 
@@ -124,9 +133,69 @@ static DATAVERSE_DOMAINS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     ])
 });
 
+// get default branch's commit
+// NOTE: this might reach rate limit as well, therefore need a client as parameter.
+async fn github_get_default_branch_commit(
+    owner: &str,
+    repo: &str,
+) -> Result<String, Exn<DispatchError>> {
+    // TODO: don't panic, and wrap client.get as client.get_json() to be used everywhere.
+    let user_agent = format!("datahugger-cli/{}", env!("CARGO_PKG_VERSION"));
+    let mut headers = HeaderMap::new();
+    if let Ok(token) = std::env::var("GITHUB_TOKEN") {
+        headers.insert(
+            AUTHORIZATION,
+            HeaderValue::from_str(&format!("token {token}")).unwrap(),
+        );
+    }
+    headers.insert(USER_AGENT, HeaderValue::from_str(&user_agent).unwrap());
+    let client = ClientBuilder::new()
+        .user_agent(&user_agent)
+        .default_headers(headers)
+        .use_native_tls()
+        .build()
+        .unwrap();
+    let repo_url = format!("https://api.github.com/repos/{owner}/{repo}");
+    let resp: JsonValue = client
+        .get(&repo_url)
+        .send()
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let default_branch: String =
+        json_extract(&resp, "default_branch").map_err(|_| DispatchError {
+            message: "not able to get default branch".to_string(),
+        })?;
+
+    let commits_url =
+        format!("https://api.github.com/repos/{owner}/{repo}/commits/{default_branch}");
+
+    let resp: JsonValue = client
+        .get(&commits_url)
+        .header("User-Agent", user_agent.clone())
+        .send()
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let commit_sha: String = json_extract(&resp, "sha").map_err(|_| DispatchError {
+        message: "not able to get default branch".to_string(),
+    })?;
+
+    Ok(commit_sha)
+}
+
 /// # Errors
 /// ???
-pub fn resolve(url: &str) -> Result<RepositoryRecord, Exn<DispatchError>> {
+#[allow(clippy::too_many_lines)]
+pub async fn resolve(url: &str) -> Result<RepositoryRecord, Exn<DispatchError>> {
     let url = Url::from_str(url).or_raise(|| DispatchError {
         message: format!("'{url}' not a valid url"),
     })?;
@@ -140,7 +209,24 @@ pub fn resolve(url: &str) -> Result<RepositoryRecord, Exn<DispatchError>> {
 
     // DataOne spec hosted
     if DATAONE_DOMAINS.contains(domain) {
-        todo!()
+        // https://data.ess-dive.lbl.gov/view/doi%3A10.15485%2F1971251
+        // resolved to xml at https://cn.dataone.org/cn/v2/object/doi%3A10.15485%2F1971251
+        let mut segments = url.path_segments().ok_or_else(|| DispatchError {
+            message: format!("'{url}' cannot be base"),
+        })?;
+        let id = segments
+            .find(|pat| pat.starts_with("doi"))
+            .ok_or_raise(|| DispatchError {
+                message: format!("expect 'doi' in '{url}'"),
+            })?;
+
+        let base_url = format!("{scheme}://{host_str}");
+        let base_url = Url::from_str(&base_url).or_raise(|| DispatchError {
+            message: format!("'{base_url}' is not valid url"),
+        })?;
+        let repo = Arc::new(Dataone::new(base_url));
+        let record = repo.get_record(id);
+        return Ok(record);
     }
 
     // Dataverse spec hosted
@@ -172,11 +258,8 @@ pub fn resolve(url: &str) -> Result<RepositoryRecord, Exn<DispatchError>> {
         match typ {
             "dataset" => {
                 let repo = Arc::new(DataverseDataset::new(base_url, version));
-                let repo_query = RepositoryRecord {
-                    repo,
-                    record_id: id.to_string(),
-                };
-                return Ok(repo_query);
+                let record = repo.get_record(id);
+                return Ok(record);
             }
             "file" => {
                 let repo = Arc::new(DataverseFile::new(base_url, version));
@@ -190,11 +273,150 @@ pub fn resolve(url: &str) -> Result<RepositoryRecord, Exn<DispatchError>> {
     }
 
     match domain {
-        "arxiv.org" => todo!(),
-        "zenodo.org" => todo!(),
-        "github.com" => todo!(),
-        "datadryad.org" => todo!(),
-        "huggingface.co" => todo!(),
+        "arxiv.org" => {
+            let mut segments = url.path_segments().ok_or_else(|| DispatchError {
+                message: format!("cannot get path segments of url '{}'", url.as_str()),
+            })?;
+            let id = segments
+                .next()
+                .and_then(|_| segments.next())
+                .ok_or(DispatchError {
+                    message: format!("connot get record id from '{url}'"),
+                })?;
+
+            let repo = Arc::new(Arxiv::new());
+            let record = repo.get_record(id);
+            Ok(record)
+        }
+        "hal.science" => {
+            let mut segments = url.path_segments().ok_or_else(|| DispatchError {
+                message: format!("cannot get path segments of url '{}'", url.as_str()),
+            })?;
+            let id = segments.next().ok_or(DispatchError {
+                message: format!("connot get record id from '{url}'"),
+            })?;
+
+            let repo = Arc::new(HalScience::new());
+            let record = repo.get_record(id);
+            Ok(record)
+        }
+        "huggingface.co" => {
+            eprintln!(
+                "\x1b[33mwarning:\x1b[0m for reliable downloads, consider using the official Hugging Face APIs:\n\
+                 \x1b[36m  - Rust:\x1b[0m hf_hub\n\
+                 \x1b[36m  - Python:\x1b[0m datasets\n\
+                 \n\
+                 \x1b[2mFor example, datahugger would handle caching, retries, and consistency for you.\x1b[0m"
+            );
+            let mut segments = url.path_segments().ok_or_else(|| DispatchError {
+                message: format!("cannot get path segments of url '{}'", url.as_str()),
+            })?;
+
+            let kind = segments.next().ok_or_else(|| DispatchError {
+                message: format!("missing repo kind in url '{}'", url.as_str()),
+            })?;
+
+            // Currently only datasets are supported
+            if kind != "datasets" {
+                exn::bail!(DispatchError {
+                    message: format!("unsupported Hugging Face repo kind '{kind}'"),
+                });
+            }
+
+            let owner = segments.next().ok_or_else(|| DispatchError {
+                message: format!("missing owner in url '{}'", url.as_str()),
+            })?;
+
+            let repo = segments.next().ok_or_else(|| DispatchError {
+                message: format!("missing repo name in url '{}'", url.as_str()),
+            })?;
+
+            // URL forms:
+            // /datasets/{owner}/{repo}
+            // /datasets/{owner}/{repo}/tree/{revision}/...
+            let (revision, _subpath) = match segments.next() {
+                Some("tree") => {
+                    let rev = segments.next().ok_or_else(|| DispatchError {
+                        message: format!("missing revision in url '{}'", url.as_str()),
+                    })?;
+                    let rest: Vec<&str> = segments.collect();
+                    (rev, rest.join("/"))
+                }
+                _ => ("main", String::new()),
+            };
+
+            let repo = Arc::new(HuggingFace::new(owner, repo, revision));
+
+            // root record (directory)
+            let record = repo.get_record("");
+            Ok(record)
+        }
+        "zenodo.org" => {
+            let segments = url
+                .path_segments()
+                .ok_or_else(|| DispatchError {
+                    message: format!("cannot get path segments of url '{}'", url.as_str()),
+                })?
+                .collect::<Vec<&str>>();
+            let record_id = if segments.len() >= 2 {
+                segments[1]
+            } else {
+                exn::bail!(DispatchError {
+                    message: format!("unable to parse dryad dataset id from '{url}'",)
+                })
+            };
+            let repo = Arc::new(Zenodo::new());
+            let record = repo.get_record(record_id);
+            Ok(record)
+        }
+        "github.com" => {
+            let mut segments = url.path_segments().ok_or_else(|| DispatchError {
+                message: format!("cannot get path segments of url '{}'", url.as_str()),
+            })?;
+
+            let owner = segments.next().ok_or_else(|| DispatchError {
+                message: format!("missing owner in url '{}'", url.as_str()),
+            })?;
+
+            let repo_name = segments.next().ok_or_else(|| DispatchError {
+                message: format!("missing repo in url '{}'", url.as_str()),
+            })?;
+
+            let record = if let Some(id) = segments.next().and_then(|_| segments.next()) {
+                let repo = Arc::new(GitHub::new(owner, repo_name));
+                repo.get_record(id)
+            } else {
+                let id = github_get_default_branch_commit(owner, repo_name).await?;
+                let repo = Arc::new(GitHub::new(owner, repo_name));
+                repo.get_record(&id)
+            };
+
+            Ok(record)
+        }
+        "datadryad.org" => {
+            // example url: https://datadryad.org/dataset/doi:10.5061/dryad.mj8m0
+            let segments = url
+                .path_segments()
+                .ok_or_else(|| DispatchError {
+                    message: format!("cannot get path segments of url '{}'", url.as_str()),
+                })?
+                .collect::<Vec<&str>>();
+            // id is 'doi:10.5061/dryad.mj8m0'
+            let record_id = if segments.len() >= 3 && segments[0] == "dataset" {
+                format!("{}/{}", segments[1], segments[2])
+            } else {
+                exn::bail!(DispatchError {
+                    message: format!("unable to parse dryad dataset id from '{url}'",)
+                })
+            };
+            let base_url = Url::from_str("https://datadryad.org/").or_raise(|| DispatchError {
+                message: "invalid base url".to_string(),
+            })?;
+
+            let repo = Arc::new(DataDryad::new(base_url));
+            let record = repo.get_record(&record_id);
+            Ok(record)
+        }
         "osf.io" => {
             let mut segments = url.path_segments().ok_or_else(|| DispatchError {
                 message: format!("cannot get path segments of url '{}'", url.as_str()),
@@ -223,29 +445,30 @@ pub fn resolve(url: &str) -> Result<RepositoryRecord, Exn<DispatchError>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn test_resolve_dataverse_default() {
+    #[tokio::test]
+    async fn test_resolve_dataverse_default() {
         // dataset
         let url = "https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/KBHLOD";
-        let qr = resolve(url).unwrap();
+        let qr = resolve(url).await.unwrap();
         assert_eq!(qr.record_id.as_str(), "doi:10.7910/DVN/KBHLOD");
         qr.repo.as_any().downcast_ref::<DataverseDataset>().unwrap();
 
         // file
         let url =
             "https://dataverse.harvard.edu/file.xhtml?persistentId=doi:10.7910/DVN/KBHLOD/DHJ45U";
-        let qr = resolve(url).unwrap();
+        let qr = resolve(url).await.unwrap();
         assert_eq!(qr.record_id.as_str(), "doi:10.7910/DVN/KBHLOD/DHJ45U");
         qr.repo.as_any().downcast_ref::<DataverseFile>().unwrap();
     }
 
-    #[test]
-    fn test_resolve_default() {
+    #[tokio::test]
+    async fn test_resolve_default() {
         // osf.io
         for url in ["https://osf.io/dezms/overview", "https://osf.io/dezms/"] {
-            let qr = resolve(url).unwrap();
+            let qr = resolve(url).await.unwrap();
             assert_eq!(qr.record_id.as_str(), "dezms");
             qr.repo.as_any().downcast_ref::<OSF>().unwrap();
         }
+        // TODO: more on supported data repos
     }
 }

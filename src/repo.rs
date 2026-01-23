@@ -155,6 +155,7 @@ pub enum Entry {
 #[derive(Debug, Clone)]
 pub struct DirMeta {
     path: CrawlPath,
+    root_url: Url,
     pub api_url: Url,
 }
 
@@ -162,24 +163,36 @@ impl std::fmt::Display for DirMeta {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "DirMeta (at: {}, src: {})",
+            "DirMeta (at: {}, src: {}, src_root: {})",
             self.path,
-            self.api_url.as_str()
+            self.api_url.as_str(),
+            self.root_url.as_str(),
         )
     }
 }
 
 impl DirMeta {
     #[must_use]
-    pub fn new(api_url: Url, path: CrawlPath) -> Self {
-        DirMeta { path, api_url }
-    }
-    #[must_use]
-    pub fn new_root(api_url: Url) -> Self {
+    pub fn new(path: CrawlPath, api_url: Url, root_url: Url) -> Self {
         DirMeta {
-            path: CrawlPath(ROOT.to_string()),
+            path,
+            root_url,
             api_url,
         }
+    }
+
+    #[must_use]
+    pub fn new_root(api_url: &Url) -> Self {
+        DirMeta {
+            path: CrawlPath(ROOT.to_string()),
+            api_url: api_url.clone(),
+            root_url: api_url.clone(),
+        }
+    }
+
+    #[must_use]
+    pub fn root_url(&self) -> Url {
+        self.root_url.clone()
     }
 
     #[must_use]
@@ -193,6 +206,7 @@ impl DirMeta {
     }
 }
 
+// TODO: this should support both xml and json to re-locate where the entry is defined
 #[derive(Debug, Clone)]
 pub struct Endpoint {
     pub parent_url: Url,
@@ -262,6 +276,8 @@ impl FileMeta {
     }
 }
 
+// XXX: github blob didnt validate, it use sha1 but compute (maybe) with 'blob {}' as prefix of
+// content. I lean to not validate github downloads for simplicity. Only do it when requests come.
 #[derive(Debug)]
 pub enum Checksum {
     Md5(String),
@@ -306,7 +322,7 @@ pub struct RepositoryRecord {
 impl RepositoryRecord {
     #[must_use]
     pub fn root_dir(&self) -> DirMeta {
-        DirMeta::new_root(self.repo.root_url(&self.record_id))
+        DirMeta::new_root(&self.repo.root_url(&self.record_id))
     }
 }
 
