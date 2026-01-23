@@ -9,7 +9,13 @@ use serde_json::Value as JsonValue;
 use url::Url;
 
 use crate::{
-    RepositoryRecord, json_extract, repo::RepositoryExt, repo_impl::{Arxiv, DataDryad, Dataone, DataverseDataset, DataverseFile, GitHub, HalScience, OSF, Zenodo}
+    json_extract,
+    repo::RepositoryExt,
+    repo_impl::{
+        Arxiv, DataDryad, Dataone, DataverseDataset, DataverseFile, GitHub, HalScience,
+        HuggingFace, Zenodo, OSF,
+    },
+    RepositoryRecord,
 };
 
 use std::collections::HashSet;
@@ -286,17 +292,65 @@ pub async fn resolve(url: &str) -> Result<RepositoryRecord, Exn<DispatchError>> 
             let mut segments = url.path_segments().ok_or_else(|| DispatchError {
                 message: format!("cannot get path segments of url '{}'", url.as_str()),
             })?;
-            let id = segments
-                .next()
-                .ok_or(DispatchError {
-                    message: format!("connot get record id from '{url}'"),
-                })?;
+            let id = segments.next().ok_or(DispatchError {
+                message: format!("connot get record id from '{url}'"),
+            })?;
 
             let repo = Arc::new(HalScience::new());
             let record = repo.get_record(id);
             Ok(record)
         }
-        "huggingface.co" => todo!(),
+        "huggingface.co" => {
+            eprintln!(
+                "\x1b[33mwarning:\x1b[0m for reliable downloads, consider using the official Hugging Face APIs:\n\
+                 \x1b[36m  - Rust:\x1b[0m hf_hub\n\
+                 \x1b[36m  - Python:\x1b[0m datasets\n\
+                 \n\
+                 \x1b[2mFor example, datahugger would handle caching, retries, and consistency for you.\x1b[0m"
+            );
+            let mut segments = url.path_segments().ok_or_else(|| DispatchError {
+                message: format!("cannot get path segments of url '{}'", url.as_str()),
+            })?;
+
+            let kind = segments.next().ok_or_else(|| DispatchError {
+                message: format!("missing repo kind in url '{}'", url.as_str()),
+            })?;
+
+            // Currently only datasets are supported
+            if kind != "datasets" {
+                exn::bail!(DispatchError {
+                    message: format!("unsupported Hugging Face repo kind '{kind}'"),
+                });
+            }
+
+            let owner = segments.next().ok_or_else(|| DispatchError {
+                message: format!("missing owner in url '{}'", url.as_str()),
+            })?;
+
+            let repo = segments.next().ok_or_else(|| DispatchError {
+                message: format!("missing repo name in url '{}'", url.as_str()),
+            })?;
+
+            // URL forms:
+            // /datasets/{owner}/{repo}
+            // /datasets/{owner}/{repo}/tree/{revision}/...
+            let (revision, _subpath) = match segments.next() {
+                Some("tree") => {
+                    let rev = segments.next().ok_or_else(|| DispatchError {
+                        message: format!("missing revision in url '{}'", url.as_str()),
+                    })?;
+                    let rest: Vec<&str> = segments.collect();
+                    (rev, rest.join("/"))
+                }
+                _ => ("main", String::new()),
+            };
+
+            let repo = Arc::new(HuggingFace::new(owner, repo, revision));
+
+            // root record (directory)
+            let record = repo.get_record("");
+            Ok(record)
+        }
         "zenodo.org" => {
             let segments = url
                 .path_segments()
@@ -415,5 +469,6 @@ mod tests {
             assert_eq!(qr.record_id.as_str(), "dezms");
             qr.repo.as_any().downcast_ref::<OSF>().unwrap();
         }
+        // TODO: more on supported data repos
     }
 }

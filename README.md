@@ -4,15 +4,17 @@ Tool for fetching data from DOI or URL.
 
 Support data repositories:
 
-| Source        | Website                         | Notes |
-|---------------|----------------------------------|-------|
-| Dataverse     | https://dataverse.org/           | [Supported Dataverse repositories](https://github.com/EOSC-Data-Commons/datahugger-rs/blob/master/dataverse-repo-list.md) |
-| OSF           | https://osf.io/                  | — |
-| GitHub        | https://github.com/              | Use a GitHub API token to get a higher rate limit |
-| arXiv         | https://arxiv.org/               | — |
-| Zenodo        | https://zenodo.org/              | — |
-| Dryad         | https://datadryad.org            | Bearer token required to download data (see [API instructions](https://datadryad.org/api) for how to your api key) |
-| DataONE       | https://www.dataone.org/         | [Supported DataONE repositories](https://github.com/EOSC-Data-Commons/datahugger-rs/blob/master/dataone-repo-list.md); requests to umbrella repositories may be slow |
+| Source             | Website                         | Notes |
+|--------------------|---------------------------------|-------|
+| Dataverse          | [dataverse.org](https://dataverse.org/) | [Supported Dataverse repositories](https://github.com/EOSC-Data-Commons/datahugger-rs/blob/master/dataverse-repo-list.md) |
+| OSF                | [osf.io](https://osf.io/)       | — |
+| GitHub ✨(new)      | [github.com](https://github.com/) | Use a GitHub API token to get a higher rate limit |
+| Hugging Face ✨(new)| [huggingface.co](https://huggingface.co/) | — |
+| arXiv              | [arxiv.org](https://arxiv.org/) | — |
+| Zenodo             | [zenodo.org](https://zenodo.org/) | — |
+| Dryad              | [datadryad.org](https://datadryad.org/) | Bearer token required to download data (see [API instructions](https://datadryad.org/api) for obtaining your API key) |
+| DataONE            | [dataone.org](https://www.dataone.org/) | [Supported DataONE repositories](https://github.com/EOSC-Data-Commons/datahugger-rs/blob/master/dataone-repo-list.md); requests to umbrella repositories may be slow |
+
 
 
 ## Usage
@@ -75,17 +77,67 @@ Python SDK mainly for downstream python libraries to implement extra operations 
 
 ## CLI Examples
 
-### Github repo download
+### GitHub - avoid hitting API rate limits using a Personal Access Token (PAT)
 
-...
+To get higher rate limits, export your [GitHub PAT](https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api) before downloading:
+If you use `gh auth token` to get token if you use `gh` to login in CLI.
 
+```bash
+export GITHUB_TOKEN="your_personal_access_token" 
+datahugger download https://github.com/user/repo --to /tmp/github_download/
+```
 ### Datadryad API key config and download
 
-...
+Datadryad requires a bearer token to access data. First, follow [API instructions](https://datadryad.org/api) to get your key.
+You need to have a dryad account and in your profile you can find your API secret, it by default expire in 10 hours.
 
-### Download for requests unlimited data repositories
+```bash
+export DRYAD_API_KEY="your_api_key"
+datahugger download https://datadryad.org/stash/dataset/doi:10.5061/dryad.example --to /tmp/dryad_download/
+```
 
-...
+### Repository without limitations
+
+- Huggingface datasets - simple download
+
+```bash
+datahugger download https://huggingface.co/datasets/HuggingFaceFW/finepdfs --to /tmp/hf_download/
+```
+
+- Dataverse - simple download
+
+```bash
+datahugger download https://dataverse.org/dataset.xhtml?persistentId=doi:10.7910/DVN/EXAMPLE --to /tmp/dataverse_download/
+```
+
+- OSF - simple download
+
+```bash
+datahugger download https://osf.io/abcd1234/ --to /tmp/osf_download/
+```
+
+- arXiv - simple download
+
+```bash
+datahugger download https://arxiv.org/src/2101.00001v1 --to /tmp/arxiv_download/
+```
+
+- Zenodo - simple download
+
+```bash
+datahugger download https://zenodo.org/record/1234567 --to /tmp/zenodo_download/
+```
+
+- DataONE - may be slow for umbrella repositories
+
+```bash
+datahugger download https://www.dataone.org/data/abcd1234 --to /tmp/dataone_download/
+```
+- Notes:
+
+- `--to /tmp/...` shows the **download target directory**.  
+- Repositories with **rate limits or auth** are highlighted with PAT / API key instructions.  
+- Others can be downloaded directly without credentials.  
 
 ## Roadmap 
 
@@ -107,8 +159,8 @@ Python SDK mainly for downstream python libraries to implement extra operations 
     - [x] datadryad
     - [x] arxiv
     - [ ] MendelyDataset
-    - [ ] HuggingFaceDataset
-    - [ ] HAL
+    - [x] HuggingFaceDataset
+    - [x] HAL
     - [ ] CERNBox
     - [x] OSFDataset
     - [x] Many Dataverse dataset  
@@ -123,7 +175,7 @@ Python SDK mainly for downstream python libraries to implement extra operations 
 - [ ] zip extract support.
 - [ ] onedata support through signposting, fairicat?
 - [ ] not only download, but a versatile metadata fetcher
-- [ ] one eosc target data repo support that not include in original py-datahugger (HAL?)
+- [x] one eosc target data repo support that not include in original py-datahugger (HAL?)
 - [ ] use this to build a fairicat converter service to dogfooding.
 - [x] python bindings
 - [ ] test python bindings in filemetrix/filefetcher.
@@ -137,6 +189,17 @@ Python SDK mainly for downstream python libraries to implement extra operations 
     - [ ] PangaeaDataset
     - [ ] B2ShareDataset
     - [ ] DjehutyDataset
+
+## Development
+
+The development environment can be managed with [devenv](https://devenv.sh/) using nix. 
+Enter a full environment with:
+
+```console 
+devenv shell -v
+```
+
+You can also use your own Rust setup, we don't enforce or test a specific Rust MSRV yet.
 
 ## License
 
