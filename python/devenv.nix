@@ -1,4 +1,5 @@
-{ pkgs, ... }: {
+{ pkgs, ... }:
+{
   languages.rust.enable = true;
   languages.python = {
     enable = true;
@@ -22,9 +23,7 @@
     pkgs.cargo-dist
     # rust python-bindings
     pkgs.maturin
+    # openssl
+    pkgs.openssl
   ];
-
-  enterTest = ''
-    cargo test --all
-  '';
 }

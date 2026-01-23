@@ -96,7 +96,10 @@ impl RepositoryRecord {
 #[pyfunction]
 #[pyo3(signature = (url, /))]
 fn resolve(_py: Python, url: &str) -> PyResult<RepositoryRecord> {
-    let record = inner_resolve(url).map_err(|err| PyRuntimeError::new_err(format!("{err}")))?;
+    let rt = tokio::runtime::Runtime::new().unwrap(); // create a runtime
+    let record = rt
+        .block_on(inner_resolve(url))
+        .map_err(|err| PyRuntimeError::new_err(format!("{err}")))?;
     Ok(RepositoryRecord(record))
 }
 
