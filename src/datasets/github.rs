@@ -17,7 +17,7 @@ use crate::{
 pub struct GitHub {
     pub owner: String,
     pub repo: String,
-    branch_or_commit: String,
+    pub branch_or_commit: String,
 }
 
 impl GitHub {

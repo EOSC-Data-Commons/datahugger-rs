@@ -18,7 +18,7 @@ use crate::{
 // API root url at https://datadryad.org/api/v2
 #[derive(Debug)]
 pub struct DataDryad {
-    id: String,
+    pub id: String,
     base_url: Url,
 }
 

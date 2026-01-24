@@ -18,7 +18,7 @@ use crate::{
 // API root url at https://zenodo.org/api/
 #[derive(Debug)]
 pub struct Zenodo {
-    id: String,
+    pub id: String,
 }
 
 impl Zenodo {

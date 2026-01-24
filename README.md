@@ -140,6 +140,12 @@ https://zenodo.org/records/17867222
 datahugger download https://zenodo.org/record/17867222 --to /tmp/zenodo_download/
 ```
 
+- Hal.science
+
+```bash
+datahugger download https://hal.science/cel-01830944 --to /tmp/hal_download/
+```
+
 - DataONE - may be slow for umbrella repositories
 
 https://arcticdata.io/catalog/view/doi%3A10.18739%2FA2542JB2X

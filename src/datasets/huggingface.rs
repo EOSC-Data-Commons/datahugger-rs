@@ -16,9 +16,9 @@ use crate::{
 
 #[derive(Debug)]
 pub struct HuggingFace {
-    owner: String,
-    repo: String,
-    revision: String,
+    pub owner: String,
+    pub repo: String,
+    pub revision: String,
 }
 
 impl HuggingFace {

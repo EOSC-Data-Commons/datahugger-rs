@@ -19,13 +19,17 @@ use crate::{
 // XXX: potentially it support: https://dataoneorg.github.io/api-documentation/apis/MN_APIs.html#MNPackage.getPackage
 #[derive(Debug)]
 pub struct Dataone {
-    id: String,
+    pub base_url: Url,
+    pub id: String,
 }
 
 impl Dataone {
     #[must_use]
-    pub fn new(id: impl Into<String>) -> Self {
-        Dataone { id: id.into() }
+    pub fn new(base_url: &Url, id: impl Into<String>) -> Self {
+        Dataone {
+            base_url: base_url.clone(),
+            id: id.into(),
+        }
     }
 }
 

@@ -17,7 +17,7 @@ use crate::{
 // API root url at https://hal.science/<id>?
 #[derive(Debug)]
 pub struct HalScience {
-    id: String,
+    pub id: String,
 }
 
 impl HalScience {

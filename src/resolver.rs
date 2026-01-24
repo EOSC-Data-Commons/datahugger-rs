@@ -210,6 +210,10 @@ pub async fn resolve(url: &str) -> Result<Dataset, Exn<DispatchError>> {
     if DATAONE_DOMAINS.contains(domain) {
         // https://data.ess-dive.lbl.gov/view/doi%3A10.15485%2F1971251
         // resolved to xml at https://cn.dataone.org/cn/v2/object/doi%3A10.15485%2F1971251
+        let base_url = format!("{scheme}://{host_str}");
+        let base_url = Url::from_str(&base_url).or_raise(|| DispatchError {
+            message: format!("'{base_url}' is not valid url"),
+        })?;
         let mut segments = url.path_segments().ok_or_else(|| DispatchError {
             message: format!("'{url}' cannot be base"),
         })?;
@@ -219,7 +223,7 @@ pub async fn resolve(url: &str) -> Result<Dataset, Exn<DispatchError>> {
                 message: format!("expect 'doi' in '{url}'"),
             })?;
 
-        let dataset = Dataset::new(Dataone::new(id));
+        let dataset = Dataset::new(Dataone::new(&base_url, id));
         return Ok(dataset);
     }
 
@@ -463,6 +467,55 @@ mod tests {
             let qr = qr.backend.as_any().downcast_ref::<OSF>().unwrap();
             assert_eq!(qr.id.as_str(), "dezms");
         }
-        // TODO: more on supported data repos
+
+        // arxiv
+        let url = "https://arxiv.org/abs/2101.00001v1";
+        let qr = resolve(url).await.unwrap();
+        let qr = qr.backend.as_any().downcast_ref::<Arxiv>().unwrap();
+        assert_eq!(qr.id.as_str(), "2101.00001v1");
+
+        // Dataone
+        let url = "https://arcticdata.io/catalog/view/doi%3A10.18739%2FA2542JB2X";
+        let qr = resolve(url).await.unwrap();
+        let qr = qr.backend.as_any().downcast_ref::<Dataone>().unwrap();
+        assert_eq!(qr.id.as_str(), "doi%3A10.18739%2FA2542JB2X");
+        assert_eq!(qr.base_url.as_str(), "https://arcticdata.io/");
+
+        // dryad
+        let url = "https://datadryad.org/dataset/doi:10.5061/dryad.mj8m0";
+        let qr = resolve(url).await.unwrap();
+        let qr = qr.backend.as_any().downcast_ref::<DataDryad>().unwrap();
+        assert_eq!(qr.id.as_str(), "doi:10.5061/dryad.mj8m0");
+
+        // github
+        // let url = "https://github.com/EOSC-Data-Commons/datahugger-rs";
+        // let qr = resolve(url).await.unwrap();
+        // let qr = qr.backend.as_any().downcast_ref::<GitHub>().unwrap();
+        // assert_eq!(qr.owner.as_str(), "EOSE-Data-Commons");
+        // assert_eq!(qr.repo.as_str(), "datahugger-rs");
+        // assert_eq!(
+        //     qr.branch_or_commit.as_str(),
+        //     "<commit number that can change because by default is the commit of default branch>"
+        // );
+
+        // hal
+        let url = "https://hal.science/cel-01830944";
+        let qr = resolve(url).await.unwrap();
+        let qr = qr.backend.as_any().downcast_ref::<HalScience>().unwrap();
+        assert_eq!(qr.id.as_str(), "cel-01830944");
+
+        // huggingface
+        let url = "https://huggingface.co/datasets/HuggingFaceFW/finepdfs";
+        let qr = resolve(url).await.unwrap();
+        let qr = qr.backend.as_any().downcast_ref::<HuggingFace>().unwrap();
+        assert_eq!(qr.owner.as_str(), "HuggingFaceFW");
+        assert_eq!(qr.repo.as_str(), "finepdfs");
+        assert_eq!(qr.revision.as_str(), "main");
+
+        // zenodo
+        let url = "https://zenodo.org/records/17867222";
+        let qr = resolve(url).await.unwrap();
+        let qr = qr.backend.as_any().downcast_ref::<Zenodo>().unwrap();
+        assert_eq!(qr.id.as_str(), "17867222");
     }
 }

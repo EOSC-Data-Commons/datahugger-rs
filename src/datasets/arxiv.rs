@@ -16,7 +16,7 @@ use crate::{
 // API root url at https://arxiv.org/pdf/
 #[derive(Debug)]
 pub struct Arxiv {
-    id: String,
+    pub id: String,
 }
 
 impl Arxiv {
