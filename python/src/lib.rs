@@ -1,7 +1,7 @@
+// TODO: dedicate exception type for PyRuntimeError.
 #![allow(clippy::needless_pass_by_value)]
-#![allow(clippy::type_complexity)] // TODO: type alias
-                                   //
-                                   // TODO: dedicate exception type for PyRuntimeError.
+// TODO: type alias
+#![allow(clippy::type_complexity)]
 
 use datahugger::{
     crawler::{CrawlerError, ProgressManager},
@@ -14,14 +14,15 @@ use indicatif::ProgressBar;
 use pyo3::{
     exceptions::{PyRuntimeError, PyStopAsyncIteration, PyStopIteration},
     prelude::*,
-    types::PyDict,
 };
+use pyo3::{ffi::c_str, types::PyDict};
 use pyo3_async_runtimes::tokio::future_into_py;
 use reqwest::ClientBuilder;
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
 
 #[pyclass]
+#[pyo3(name = "Dataset")]
 #[derive(Clone)]
 struct PyDataset(Dataset);
 
@@ -37,21 +38,6 @@ impl ProgressManager for NoProgress {
         ProgressBar::hidden()
     }
 }
-
-// impl RepositoryRecord {
-//     async fn inner_download<P>(
-//         self,
-//         client: &Client,
-//         dst_dir: P,
-//         mp: impl ProgressManager,
-//         limit: usize,
-//     ) -> Result<(), Exn<CrawlerError>>
-//     where
-//         P: AsRef<Path> + Sync + Send,
-//     {
-//         todo!()
-//     }
-// }
 
 #[pymethods]
 impl PyDataset {
@@ -79,23 +65,6 @@ impl PyDataset {
         })
         .map_err(|err| PyRuntimeError::new_err(format!("{err}")))
     }
-
-    // #[pyo3(signature = (dst_dir, limit=0))]
-    // fn download(self_: PyRef<'_, Self>, dst_dir: PathBuf, limit: usize) -> PyResult<()> {
-    //     let user_agent = format!("datahugger-py/{}", env!("CARGO_PKG_VERSION"));
-    //     let client = ClientBuilder::new().user_agent(user_agent).build().unwrap();
-    //     let mp = NoProgress;
-    //
-    //     // blocking call to download, not ideal, but just to sync with original API.
-    //     let rt = tokio::runtime::Runtime::new().expect("unable to create tokio runtime");
-    //     rt.block_on(async move {
-    //         self_
-    //             .clone()
-    //             .inner_download(&client, dst_dir, mp, limit)
-    //             .await
-    //     })
-    //     .map_err(|err| PyRuntimeError::new_err(format!("{err}")))
-    // }
 
     fn root_url(self_: PyRef<'_, Self>) -> String {
         let repo = self_.0.backend.clone();
@@ -126,13 +95,6 @@ fn resolve(_py: Python, url: &str) -> PyResult<PyDataset> {
     Ok(PyDataset(ds))
 }
 
-#[pymodule]
-#[pyo3(name = "datahugger")]
-fn datahuggerpy(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(resolve, m)?)?;
-    Ok(())
-}
-
 #[pyclass]
 struct PyCrawlStream {
     stream: Arc<Mutex<BoxStream<'static, Result<Entry, Exn<CrawlerError>>>>>,
@@ -146,6 +108,63 @@ impl PyCrawlStream {
     }
 }
 
+#[pyclass]
+#[pyo3(name = "Entry", subclass)]
+struct PyEntryBase;
+
+#[pymethods]
+impl PyEntryBase {
+    #[new]
+    fn new() -> Self {
+        PyEntryBase
+    }
+}
+
+#[pyclass]
+#[pyo3(name = "DirEntry", extends=PyEntryBase)]
+struct PyDirEntry {
+    #[pyo3(get)]
+    path_craw_rel: PathBuf,
+    #[pyo3(get)]
+    root_url: String,
+    #[pyo3(get)]
+    api_url: String,
+}
+
+#[pyclass]
+#[pyo3(name = "FileEntry", extends=PyEntryBase)]
+struct PyFileEntry {
+    #[pyo3(get, set)]
+    path_craw_rel: PathBuf,
+    #[pyo3(get, set)]
+    download_url: String,
+    #[pyo3(get, set)]
+    size: Option<u64>,
+    #[pyo3(get, set)]
+    checksum: Vec<(String, String)>,
+}
+
+#[pymethods]
+impl PyFileEntry {
+    #[new]
+    fn new(
+        path_craw_rel: PathBuf,
+        download_url: String,
+        size: Option<u64>,
+        checksum: Vec<(String, String)>,
+    ) -> (Self, PyEntryBase) {
+        (
+            PyFileEntry {
+                path_craw_rel,
+                download_url,
+                size,
+                checksum,
+            },
+            PyEntryBase::new(),
+        )
+    }
+}
+
 #[derive(Debug)]
 struct PyEntry(Entry);
 
@@ -155,31 +174,51 @@ impl<'py> IntoPyObject<'py> for PyEntry {
     type Error = std::convert::Infallible;
 
     fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
-        let dict = PyDict::new(py);
+        let obj = match self.0 {
+            Entry::Dir(meta) => Py::new(
+                py,
+                (
+                    PyDirEntry {
+                        path_craw_rel: PathBuf::from(meta.path.as_str()),
+                        root_url: meta.root_url.as_str().to_string(),
+                        api_url: meta.api_url.as_str().to_string(),
+                    },
+                    PyEntryBase,
+                ),
+            )
+            .map(pyo3::Py::into_any)
+            .expect("cannot construct the PyDirEntry"),
+            Entry::File(meta) => Py::new(
+                py,
+                (
+                    PyFileEntry {
+                        path_craw_rel: PathBuf::from(meta.path.as_str()),
+                        download_url: meta.download_url.as_str().to_string(),
+                        size: meta.size,
+                        checksum: meta
+                            .checksum
+                            .iter()
+                            .map(|cs| match cs {
+                                datahugger::Checksum::Md5(v) => ("md5".to_string(), v.clone()),
+                                datahugger::Checksum::Sha256(v) => {
+                                    ("sha256".to_string(), v.clone())
+                                }
+                            })
+                            .collect::<Vec<_>>(),
+                    },
+                    PyEntryBase,
+                ),
+            )
+            .map(pyo3::Py::into_any)
+            .expect("cannot construct the PyDirEntry"),
+        };
 
-        match self.0 {
-            Entry::Dir(meta) => {
-                dict.set_item("type", "dir").unwrap();
-                dict.set_item("path", meta.path.as_str()).unwrap();
-                dict.set_item("root_url", meta.root_url.as_str()).unwrap();
-                dict.set_item("api_url", meta.api_url.as_str()).unwrap();
-            }
-            Entry::File(meta) => {
-                dict.set_item("type", "file").unwrap();
-                dict.set_item("path", meta.path.as_str()).unwrap();
-                // dict.set_item("endpoint", meta.endpoint).unwrap();
-                dict.set_item("download_url", meta.download_url.as_str())
-                    .unwrap();
-                dict.set_item("size", meta.size).unwrap();
-                // dict.set_item("checksum", meta.checksum).unwrap();
-            }
-        }
-
-        Ok(dict.into_any())
+        Ok(obj.into_bound(py))
     }
 }
 
-// learn from: https://github.com/developmentseed/obstore/blob/5e4c8341241c3e1491601ea61dd0029f269f4d7e/obstore/src/get.rs#L226
+// learn from:
+// https://github.com/developmentseed/obstore/blob/5e4c8341241c3e1491601ea61dd0029f269f4d7e/obstore/src/get.rs#L226
 #[pymethods]
 impl PyCrawlStream {
     fn __aiter__(slf: PyRef<Self>) -> PyRef<Self> {
@@ -223,4 +262,40 @@ async fn next_stream(
             }
         }
     }
+}
+
+#[pymodule]
+#[pyo3(name = "datahugger")]
+fn datahuggerpy(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(resolve, m)?)?;
+    m.add_class::<PyDataset>()?;
+    m.add_class::<PyEntryBase>()?;
+
+    // Dir
+    let dir = py.get_type::<PyDirEntry>();
+    let ann = PyDict::new(py);
+    ann.set_item("path_craw_rel", py.get_type::<pyo3::types::PyString>())?;
+    ann.set_item("root_url", py.get_type::<pyo3::types::PyString>())?;
+    ann.set_item("api_url", py.get_type::<pyo3::types::PyString>())?;
+    dir.setattr("__annotations__", ann)?;
+    py.import("dataclasses")?
+        .getattr("dataclass")?
+        .call1((dir,))?;
+    // File
+    let f = py.get_type::<PyFileEntry>();
+    let ann = PyDict::new(py);
+    ann.set_item("path_craw_rel", py.get_type::<pyo3::types::PyString>())?;
+    ann.set_item("download_url", py.get_type::<pyo3::types::PyString>())?;
+    let size_type = py.eval(c_str!("int | None"), None, None)?;
+    ann.set_item("size", size_type)?;
+    let checksum_type = py.eval(c_str!("list[tuple[str, str]]"), None, None)?;
+    ann.set_item("checksum", checksum_type)?;
+    f.setattr("__annotations__", ann)?;
+    py.import("dataclasses")?
+        .getattr("dataclass")?
+        .call1((f,))?;
+
+    m.add_class::<PyDirEntry>()?;
+    m.add_class::<PyFileEntry>()?;
+    Ok(())
 }

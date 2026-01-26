@@ -1,3 +1,8 @@
-from .datahugger import resolve
+from .datahugger import resolve, DirEntry, FileEntry, Dataset
 
-__all__ = ("resolve",)
+__all__ = (
+    "resolve",
+    "DirEntry",
+    "FileEntry",
+    "Dataset",
+)

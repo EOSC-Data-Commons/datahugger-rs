@@ -76,12 +76,12 @@ Simply resolve a dataset and stream its entries with async for as they arrive:
 
 ```python
 import asyncio
-from crawler import resolve
+from datahugger import resolve
 
 async def main():
     ds = resolve("https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/KBHLOD")
     async for entry in ds.crawl():
-        // or any async operation on the returned entry
+        # print or any async operation on the returned entry
         print("crawl:", entry)
 
 asyncio.run(main())
