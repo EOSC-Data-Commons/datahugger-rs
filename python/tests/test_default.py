@@ -1,7 +1,8 @@
 import asyncio
+import pathlib
 import pytest
 from pathlib import Path
-from datahugger import resolve
+from datahugger import FileEntry, resolve
 
 
 def test_resolve_default():
@@ -32,6 +33,22 @@ def test_download(tmp_path: Path):
         "tutorial3.py",
         "tutorial4.py",
     ]
+
+
+def test_dataclass_constructor():
+    entry = FileEntry(
+        pathlib.Path("/tmp/x"),
+        "https://example.com/download_url",
+        None,
+        [],
+    )
+    assert str(entry.path_craw_rel) == "/tmp/x"
+    assert entry.download_url == "https://example.com/download_url"
+    assert entry.size is None
+    assert entry.checksum == []
+
+    entry.size = 12
+    assert entry.size == 12
 
 
 def test_crawl_blocking():
