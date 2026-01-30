@@ -43,7 +43,7 @@ wheels = [
 ]
 
 [[package]]
-name = "datahugger"
+name = "datahugger-ng"
 source = { editable = "." }
 
 [package.optional-dependencies]
