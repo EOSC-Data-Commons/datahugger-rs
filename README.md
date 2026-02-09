@@ -29,19 +29,23 @@ Support data repositories:
 
 prebuilt binaries via shell
 
-```sh
+```console
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/EOSC-Data-Commons/datahugger-rs/releases/download/v0.1.1/datahugger-installer.sh | sh
 ```
 
-```sh
+```console
 powershell -ExecutionPolicy Bypass -c "irm https://github.com/EOSC-Data-Commons/datahugger-rs/releases/download/v0.1.1/datahugger-installer.ps1 | iex"
 ```
 
-```sh
+```console
 brew install unkcpz/tap/datahugger
 ```
 
-python library via
+```console
+cargo install datahugger
+```
+
+For downloading and use python library via,
 
 ```console
 pip install datahugger-ng
@@ -100,12 +104,12 @@ assert sorted([i.name for i in tmp_path.iterdir()]) == [
 ]
 ```
 
-The download is very efficient because the underlying Rust implementation leverages all available CPU cores and maximizes your bandwidth.
+The download is very efficient because the underlying Rust implementation leverages all available CPU cores and maximizes the usage your bandwidth.
 Use the `limit` parameter to control concurrency; by default, it is set to `0`, which means no limit.
 
-We also provide a low-level Python API for implementing custom operations after files are crawled. 
+Besides the API for download files in a dataset, we also provide a low-level Python API for implementing custom operations after files are crawled. 
 Crawl datasets efficiently and asynchronously with our Rust-powered crawler -- fully utilizing all CPU cores and your network bandwidth.    
-Simply resolve a dataset and stream its entries with async for as they arrive:
+Simply resolve a dataset and stream its entries with `async for` and deal with entries concurrently as they arrive:
 
 ```python
 import asyncio
@@ -237,6 +241,7 @@ datahugger download https://arcticdata.io/catalog/view/doi%3A10.18739%2FA2542JB2
 - [x] clear interface for adding crawling results dealing operations beyond download.
 - [x] strong error handling mechanism and logging to avoid interruptions (using `exn` crate).
 - [x] Sharable client connection to reduce the cost of repeated reconnections.
+- [ ] automatically resolve doi into dateset source url.
 - [ ] do detail benchs to show its power (might not need, the cli download already *~1000* times faster for example for dataset https://osf.io/3ua2c/).
 - [x] single-pass streaming with computing checksum by plug a hasher in the pipeline.
 - [ ] all repos that already supported by py-datahugger
