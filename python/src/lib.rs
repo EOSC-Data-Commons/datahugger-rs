@@ -20,7 +20,8 @@ pub fn main() {
 use datahugger::{
     crawl,
     crawler::{CrawlerError, ProgressManager},
-    resolve as inner_resolve, resolve_doi_to_url as inner_resolve_doi_to_url, CrawlExt, Dataset, DownloadExt, Entry, FileMeta,
+    resolve as inner_resolve, resolve_doi_to_url as inner_resolve_doi_to_url, CrawlExt, Dataset,
+    DownloadExt, Entry, FileMeta,
 };
 use exn::Exn;
 use futures_core::stream::BoxStream;

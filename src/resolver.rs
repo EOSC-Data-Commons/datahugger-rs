@@ -33,6 +33,19 @@ impl std::fmt::Display for DispatchError {
 
 impl std::error::Error for DispatchError {}
 
+#[derive(Debug)]
+pub struct ResolveError {
+    pub message: String,
+}
+
+impl std::fmt::Display for ResolveError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for ResolveError {}
+
 static DATAONE_DOMAINS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     HashSet::from([
         "arcticdata.io",
@@ -191,26 +204,37 @@ async fn github_get_default_branch_commit(
     Ok(commit_sha)
 }
 
-
-pub async fn resolve_doi_to_url(doi: &str) -> Result<String,  Box<dyn std::error::Error>> {
-    println!("DOI {}", doi);
-
+pub async fn resolve_doi_to_url(doi: &str) -> Result<String, Exn<ResolveError>> {
     let client = ClientBuilder::new()
         .use_native_tls()
         .redirect(reqwest::redirect::Policy::none())
-        .build()?;
+        .build()
+        .or_raise(|| ResolveError {
+            message: String::from("Could not build reqwest client"),
+        })?;
 
-    let res = client
-        .get(format!("https://doi.org/{}", doi))
-        .send()
-        .await?;
+    let res = match client.get(format!("https://doi.org/{}", doi)).send().await {
+        Ok(res) => res,
+        Err(err) => {
+            exn::bail!(ResolveError {
+                message: format!("failed to resolve '{doi}': {err:?}")
+            })
+        }
+    };
 
-    let location = res
-        .headers()
-        .get("Location")
-        .ok_or("No Location header in response")?
-        .to_str()?
-        .to_string();
+    let location = match res.headers().get("Location") {
+        Some(header_value) => header_value
+            .to_str()
+            .or_raise(|| ResolveError {
+                message: String::from("Invalid Location header value"),
+            })?
+            .to_string(),
+        None => {
+            exn::bail!(ResolveError {
+                message: String::from("No Location header in response")
+            })
+        }
+    };
 
     Ok(location)
 }
