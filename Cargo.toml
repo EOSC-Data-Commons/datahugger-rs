@@ -26,7 +26,7 @@ bytes = "1.11.1"
 clap = { version = "4.5.57", features = ["derive"] }
 digest = "0.10.7"
 exn = "0.3.0"
-futures-core = "0.3.31"
+futures-core = "0.3.32"
 futures-util = "0.3.31"
 hex = "0.4.3"
 indicatif = "0.18.3"
