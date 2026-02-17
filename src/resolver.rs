@@ -33,6 +33,19 @@ impl std::fmt::Display for DispatchError {
 
 impl std::error::Error for DispatchError {}
 
+#[derive(Debug)]
+pub struct ResolveError {
+    pub message: String,
+}
+
+impl std::fmt::Display for ResolveError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for ResolveError {}
+
 static DATAONE_DOMAINS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     HashSet::from([
         "arcticdata.io",
@@ -189,6 +202,57 @@ async fn github_get_default_branch_commit(
     })?;
 
     Ok(commit_sha)
+}
+
+async fn resolve_doi_to_url_with_base(
+    doi: &str,
+    base_url: Option<&str>,
+) -> Result<String, Exn<ResolveError>> {
+    // check if doi is valid
+    if !(doi.starts_with("10.") && doi.contains('/')) {
+        exn::bail!(ResolveError {
+            message: format!("Invalid DOI: '{doi}'"),
+        });
+    }
+
+    let base_url = base_url.unwrap_or("https://doi.org");
+
+    let client = ClientBuilder::new()
+        .use_native_tls()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .or_raise(|| ResolveError {
+            message: String::from("Could not build reqwest client"),
+        })?;
+
+    let res = match client.get(format!("{}/{}", base_url, doi)).send().await {
+        Ok(res) => res,
+        Err(err) => {
+            exn::bail!(ResolveError {
+                message: format!("failed to resolve '{doi}': {err:?}")
+            })
+        }
+    };
+
+    let location = match res.headers().get("Location") {
+        Some(header_value) => header_value
+            .to_str()
+            .or_raise(|| ResolveError {
+                message: String::from("Invalid Location header value"),
+            })?
+            .to_string(),
+        None => {
+            exn::bail!(ResolveError {
+                message: String::from("No Location header in response")
+            })
+        }
+    };
+
+    Ok(location)
+}
+
+pub async fn resolve_doi_to_url(doi: &str) -> Result<String, Exn<ResolveError>> {
+    resolve_doi_to_url_with_base(doi, None).await
 }
 
 /// # Errors
@@ -439,6 +503,9 @@ pub async fn resolve(url: &str) -> Result<Dataset, Exn<DispatchError>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
     #[tokio::test]
     async fn test_resolve_dataverse_default() {
         // dataset
@@ -517,5 +584,44 @@ mod tests {
         let qr = resolve(url).await.unwrap();
         let qr = qr.backend.as_any().downcast_ref::<Zenodo>().unwrap();
         assert_eq!(qr.id.as_str(), "17867222");
+    }
+
+    #[tokio::test]
+    async fn test_resolve_doi_to_url() {
+        // test valid doi and mock HTTP call
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/10.34894/0B7ZLK"))
+            .respond_with(ResponseTemplate::new(301).append_header(
+                "Location",
+                "https://dataverse.nl/citation?persistentId=doi:10.34894/0B7ZLK",
+            ))
+            .mount(&mock_server)
+            .await;
+
+        let res = resolve_doi_to_url_with_base("10.34894/0B7ZLK", Some(&mock_server.uri())).await;
+
+        assert!(res.is_ok());
+
+        let url = res.unwrap();
+        assert_eq!(
+            url,
+            "https://dataverse.nl/citation?persistentId=doi:10.34894/0B7ZLK"
+        );
+
+        // test an invalid DOI
+        let res = resolve_doi_to_url_with_base(
+            "https://dpoi.org/10.34894/0B7ZLK",
+            Some(&mock_server.uri()),
+        )
+        .await;
+
+        assert!(res.is_err());
+
+        assert_eq!(
+            res.unwrap_err().message,
+            "Invalid DOI: 'https://dpoi.org/10.34894/0B7ZLK'"
+        );
     }
 }
