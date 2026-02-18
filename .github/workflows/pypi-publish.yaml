@@ -12,22 +12,28 @@ permissions:
   contents: read
 jobs:
   linux:
-    runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
         platform:
           - runner: ubuntu-22.04
             target: x86_64
+            manylinux: 2_28
           - runner: ubuntu-22.04
             target: x86
-          # - runner: ubuntu-22.04
-          #   target: aarch64
+            manylinux: 2_28
+          - runner: ubuntu-22.04
+            target: aarch64
+            manylinux: 2_28
           - runner: ubuntu-22.04
             target: armv7
+            manylinux: 2_28
           # - runner: ubuntu-22.04
           #   target: s390x
+          #   manylinux: 2_28
           - runner: ubuntu-22.04
             target: ppc64le
+            manylinux: 2_28
+    runs-on: ${{ matrix.platform.runner }}
     steps:
       - uses: actions/checkout@v4
       - name: Calculate openssl-vendored
@@ -44,9 +50,9 @@ jobs:
         with:
           working-directory: python
           target: ${{ matrix.platform.target }}
-          args: --release --out dist ${{ steps.is-openssl-vendored.outputs.enabled }}
+          args: --release --compatibility pypi --out dist ${{ steps.is-openssl-vendored.outputs.enabled }}
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          manylinux: auto
+          manylinux: ${{ matrix.platform.manylinux }}
           before-script-linux: |
             case "${{ matrix.platform.target }}" in
               "aarch64" | "armv7" | "s390x" | "ppc64le")

@@ -45,7 +45,6 @@ xmltree = "0.12.0"
 [dev-dependencies]
 wiremock = "0.6.5"
 
-
 # The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"

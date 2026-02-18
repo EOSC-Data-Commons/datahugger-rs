@@ -141,9 +141,7 @@ See [python api doc](https://github.com/EOSC-Data-Commons/datahugger-ng/blob/mas
 
 Following architecture not yet able to install from pypi.
 
-- target: aarch64
 - target: s390x
-
 
 ## CLI Examples
 
