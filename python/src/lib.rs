@@ -169,14 +169,18 @@ impl DOIResolver {
         }
     }
 
-    fn resolve(&self, doi: String) -> PyResult<String> {
+    #[pyo3(signature = (doi, follow_redirects=None))]
+    fn resolve(&self, doi: String, follow_redirects: Option<bool>) -> PyResult<String> {
+        let follow_redirects = follow_redirects.unwrap_or(false);
         self.runtime
-            .block_on(inner_resolve_doi_to_url(&self.client, &doi))
+            .block_on(inner_resolve_doi_to_url(&self.client, &doi, follow_redirects))
             .map_err(|err| PyRuntimeError::new_err(format!("{err}")))
     }
 
-    fn resolve_many(&self, dois: Vec<String>) -> PyResult<Vec<String>> {
-        let futures = dois.iter().map(|doi| inner_resolve_doi_to_url(&self.client, doi));
+    #[pyo3(signature = (dois, follow_redirects=None))]
+    fn resolve_many(&self, dois: Vec<String>, follow_redirects: Option<bool>) -> PyResult<Vec<String>> {
+        let follow_redirects = follow_redirects.unwrap_or(false);
+        let futures = dois.iter().map(|doi| inner_resolve_doi_to_url(&self.client, doi, follow_redirects));
         self.runtime
             .block_on(futures::future::join_all(futures))
             .into_iter()

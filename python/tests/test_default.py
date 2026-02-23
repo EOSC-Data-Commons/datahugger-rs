@@ -22,6 +22,9 @@ def test_resolve_doi_blocking():
     url = doi_resolver.resolve("10.34894/0B7ZLK")
     assert url == "https://dataverse.nl/citation?persistentId=doi:10.34894/0B7ZLK"
 
+    url = doi_resolver.resolve("10.34894/0B7ZLK", True)
+    assert url == "https://dataverse.nl/dataset.xhtml?persistentId=doi:10.34894/0B7ZLK"
+
     urls = doi_resolver.resolve_many(
         ["10.34894/0B7ZLK", "10.17026/DANS-2AC-ETD6", "10.17026/DANS-2BA-UAVX"]
     )

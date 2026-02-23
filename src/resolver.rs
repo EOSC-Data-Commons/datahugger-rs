@@ -208,6 +208,7 @@ async fn resolve_doi_to_url_with_base(
     client: &reqwest::Client,
     doi: &str,
     base_url: Option<&str>,
+    follow_redirects: bool,
 ) -> Result<String, Exn<ResolveError>> {
     // check if doi is valid
     if !(doi.starts_with("10.") && doi.contains('/')) {
@@ -219,7 +220,8 @@ async fn resolve_doi_to_url_with_base(
     let base_url = base_url.unwrap_or("https://doi.org/api/handles");
 
     let res = match client
-        .get(format!("{}/{}?type=URL", base_url, doi))
+        .get(format!("{}/{}", base_url, doi))
+        .query(&[("type", "URL")])
         .send()
         .await
     {
@@ -250,56 +252,51 @@ async fn resolve_doi_to_url_with_base(
         }
     };
 
-    let url: Result<String, Exn<ResolveError>> =
-        match json.get("responseCode").and_then(|v| v.as_i64()) {
-            Some(1) => match json.get("values").and_then(|v| v.as_array()) {
-                Some(values) if !values.is_empty() => {
-                    match values[0]
-                        .get("data")
-                        .and_then(|d| d.get("value"))
-                        .and_then(|v| v.as_str())
-                    {
-                        Some(url) => Ok(url.to_string()),
-                        None => exn::bail!(ResolveError {
-                            message: format!("missing data.value for '{doi}'")
-                        }),
-                    }
+    let url = match json.get("responseCode").and_then(|v| v.as_i64()) {
+        Some(1) => match json.get("values").and_then(|v| v.as_array()) {
+            Some(values) if !values.is_empty() => {
+                match values[0]
+                    .get("data")
+                    .and_then(|d| d.get("value"))
+                    .and_then(|v| v.as_str())
+                {
+                    Some(url) => Ok::<String, Exn<ResolveError>>(url.to_string()),
+                    None => exn::bail!(ResolveError {
+                        message: format!("missing data.value for '{doi}'")
+                    }),
                 }
-                _ => exn::bail!(ResolveError {
-                    message: format!("empty or missing values for '{doi}'")
-                }),
-            },
-            Some(code) => exn::bail!(ResolveError {
-                message: format!("unexpected responseCode {code} for '{doi}'")
+            }
+            _ => exn::bail!(ResolveError {
+                message: format!("empty or missing values for '{doi}'")
             }),
-            None => exn::bail!(ResolveError {
-                message: format!("missing responseCode for '{doi}'")
+        },
+        Some(code) => exn::bail!(ResolveError {
+            message: format!("unexpected responseCode {code} for '{doi}'")
+        }),
+        None => exn::bail!(ResolveError {
+            message: format!("missing responseCode for '{doi}'")
+        }),
+    }?;
+
+    if follow_redirects {
+        let res = match client.head(&url).send().await {
+            Ok(res) => res,
+            Err(err) => exn::bail!(ResolveError {
+                message: format!("failed to follow redirect for '{url}': {err:?}")
             }),
         };
-
-    url
-
-    /*
-    let location = match res.headers().get("Location") {
-        Some(header_value) => header_value
-            .to_str()
-            .or_raise(|| ResolveError {
-                message: String::from("Invalid Location header value"),
-            })?
-            .to_string(),
-        None => {
-            exn::bail!(ResolveError {
-                message: String::from("No Location header in response")
-            })
-        }
-    };*/
+        Ok(res.url().to_string())
+    } else {
+        Ok(url)
+    }
 }
 
 pub async fn resolve_doi_to_url(
     client: &reqwest::Client,
     doi: &str,
+    follow_redirects: bool,
 ) -> Result<String, Exn<ResolveError>> {
-    resolve_doi_to_url_with_base(client, doi, None).await
+    resolve_doi_to_url_with_base(client, doi, None, follow_redirects).await
 }
 
 /// # Errors
@@ -666,9 +663,13 @@ mod tests {
             .build()
             .unwrap();
 
-        let res =
-            resolve_doi_to_url_with_base(&client, "10.34894/0B7ZLK", Some(&mock_server.uri()))
-                .await;
+        let res = resolve_doi_to_url_with_base(
+            &client,
+            "10.34894/0B7ZLK",
+            Some(&mock_server.uri()),
+            false,
+        )
+        .await;
 
         assert!(res.is_ok());
 
@@ -683,6 +684,7 @@ mod tests {
             &client,
             "https://doi.org/10.34894/0B7ZLK",
             Some(&mock_server.uri()),
+            false,
         )
         .await;
 
