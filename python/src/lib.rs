@@ -163,7 +163,6 @@ impl DOIResolver {
             runtime: tokio::runtime::Runtime::new().unwrap(),
             client: reqwest::Client::builder()
                 .use_native_tls()
-                .redirect(reqwest::redirect::Policy::none())
                 .timeout(Duration::from_secs(timeout))
                 .build()
                 .unwrap()

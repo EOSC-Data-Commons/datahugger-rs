@@ -216,9 +216,13 @@ async fn resolve_doi_to_url_with_base(
         });
     }
 
-    let base_url = base_url.unwrap_or("https://doi.org");
+    let base_url = base_url.unwrap_or("https://doi.org/api/handles");
 
-    let res = match client.get(format!("{}/{}", base_url, doi)).send().await {
+    let res = match client
+        .get(format!("{}/{}?type=URL", base_url, doi))
+        .send()
+        .await
+    {
         Ok(res) => res,
         Err(err) => {
             exn::bail!(ResolveError {
@@ -227,6 +231,55 @@ async fn resolve_doi_to_url_with_base(
         }
     };
 
+    let status = res.status();
+
+    //println!("{status:?}");
+
+    if !status.is_success() {
+        exn::bail!(ResolveError {
+            message: format!("failed to resolve '{doi}': status {status}")
+        });
+    }
+
+    let json: serde_json::Value = match res.json().await {
+        Ok(json) => json,
+        Err(err) => {
+            exn::bail!(ResolveError {
+                message: format!("failed to parse response for '{doi}': {err:?}")
+            })
+        }
+    };
+
+    let url: Result<String, Exn<ResolveError>> =
+        match json.get("responseCode").and_then(|v| v.as_i64()) {
+            Some(1) => match json.get("values").and_then(|v| v.as_array()) {
+                Some(values) if !values.is_empty() => {
+                    match values[0]
+                        .get("data")
+                        .and_then(|d| d.get("value"))
+                        .and_then(|v| v.as_str())
+                    {
+                        Some(url) => Ok(url.to_string()),
+                        None => exn::bail!(ResolveError {
+                            message: format!("missing data.value for '{doi}'")
+                        }),
+                    }
+                }
+                _ => exn::bail!(ResolveError {
+                    message: format!("empty or missing values for '{doi}'")
+                }),
+            },
+            Some(code) => exn::bail!(ResolveError {
+                message: format!("unexpected responseCode {code} for '{doi}'")
+            }),
+            None => exn::bail!(ResolveError {
+                message: format!("missing responseCode for '{doi}'")
+            }),
+        };
+
+    url
+
+    /*
     let location = match res.headers().get("Location") {
         Some(header_value) => header_value
             .to_str()
@@ -239,9 +292,7 @@ async fn resolve_doi_to_url_with_base(
                 message: String::from("No Location header in response")
             })
         }
-    };
-
-    Ok(location)
+    };*/
 }
 
 pub async fn resolve_doi_to_url(
@@ -501,7 +552,7 @@ mod tests {
     use super::*;
     use std::time::Duration;
 
-    use wiremock::matchers::{method, path};
+    use wiremock::matchers::{method, path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
     #[tokio::test]
     async fn test_resolve_dataverse_default() {
@@ -590,16 +641,27 @@ mod tests {
 
         Mock::given(method("GET"))
             .and(path("/10.34894/0B7ZLK"))
-            .respond_with(ResponseTemplate::new(301).append_header(
-                "Location",
-                "https://dataverse.nl/citation?persistentId=doi:10.34894/0B7ZLK",
-            ))
+            .and(query_param("type", "URL"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+        "responseCode": 1,
+        "values": [
+            {
+                "index": 1,
+                "type": "URL",
+                "data": {
+                    "format": "string",
+                    "value": "https://dataverse.nl/citation?persistentId=doi:10.34894/0B7ZLK"
+                },
+                "ttl": 86400,
+                "timestamp": "2021-12-23T16:59:30Z"
+            }
+        ]
+    })))
             .mount(&mock_server)
             .await;
 
         let client = reqwest::Client::builder()
             .use_native_tls()
-            .redirect(reqwest::redirect::Policy::none())
             .timeout(Duration::from_secs(5))
             .build()
             .unwrap();
@@ -619,7 +681,7 @@ mod tests {
         // test an invalid DOI
         let res = resolve_doi_to_url_with_base(
             &client,
-            "https://dpoi.org/10.34894/0B7ZLK",
+            "https://doi.org/10.34894/0B7ZLK",
             Some(&mock_server.uri()),
         )
         .await;
@@ -628,7 +690,7 @@ mod tests {
 
         assert_eq!(
             res.unwrap_err().message,
-            "Invalid DOI: 'https://dpoi.org/10.34894/0B7ZLK'"
+            "Invalid DOI: 'https://doi.org/10.34894/0B7ZLK'"
         );
     }
 }
