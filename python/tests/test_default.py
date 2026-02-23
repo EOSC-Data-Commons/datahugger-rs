@@ -17,7 +17,7 @@ def test_resolve_default():
 
 
 def test_resolve_doi_blocking():
-    doi_resolver = DOIResolver(timeout=5)
+    doi_resolver = DOIResolver(timeout=30)
 
     url = doi_resolver.resolve("10.34894/0B7ZLK")
     assert url == "https://dataverse.nl/citation?persistentId=doi:10.34894/0B7ZLK"
