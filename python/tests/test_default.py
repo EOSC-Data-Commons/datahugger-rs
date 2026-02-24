@@ -2,7 +2,7 @@ import asyncio
 import pathlib
 import pytest
 from pathlib import Path
-from datahugger import FileEntry, resolve
+from datahugger import FileEntry, resolve, DOIResolver
 
 
 def test_resolve_default():
@@ -14,6 +14,36 @@ def test_resolve_default():
         ds.root_url()
         == "https://dataverse.harvard.edu/api/datasets/:persistentId/versions/:latest-published?persistentId=doi%3A10.7910%2FDVN%2FKBHLOD"
     )
+
+
+def test_resolve_doi_blocking():
+    doi_resolver = DOIResolver(timeout=30)
+
+    url = doi_resolver.resolve("10.34894/0B7ZLK", False)
+    assert url == "https://dataverse.nl/citation?persistentId=doi:10.34894/0B7ZLK"
+
+    url = doi_resolver.resolve("10.34894/0B7ZLK")
+    assert url == "https://dataverse.nl/dataset.xhtml?persistentId=doi:10.34894/0B7ZLK"
+
+    urls = doi_resolver.resolve_many(
+        ["10.34894/0B7ZLK", "10.17026/DANS-2AC-ETD6", "10.17026/DANS-2BA-UAVX"], False
+    )
+
+    assert urls == [
+        "https://dataverse.nl/citation?persistentId=doi:10.34894/0B7ZLK",
+        "https://phys-techsciences.datastations.nl/citation?persistentId=doi:10.17026/DANS-2AC-ETD6",
+        "https://phys-techsciences.datastations.nl/citation?persistentId=doi:10.17026/DANS-2BA-UAVX",
+    ]
+
+    urls = doi_resolver.resolve_many(
+        ["10.34894/0B7ZLK", "10.17026/DANS-2AC-ETD6", "10.17026/DANS-2BA-UAVX"]
+    )
+
+    assert urls == [
+        "https://dataverse.nl/dataset.xhtml?persistentId=doi:10.34894/0B7ZLK",
+        "https://phys-techsciences.datastations.nl/dataset.xhtml?persistentId=doi:10.17026/DANS-2AC-ETD6",
+        "https://phys-techsciences.datastations.nl/dataset.xhtml?persistentId=doi:10.17026/DANS-2BA-UAVX",
+    ]
 
 
 def test_download(tmp_path: Path):

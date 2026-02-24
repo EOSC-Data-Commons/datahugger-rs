@@ -35,6 +35,8 @@ use pyo3::{ffi::c_str, types::PyDict};
 use pyo3_async_runtimes::tokio::future_into_py;
 use reqwest::{Client, ClientBuilder};
 use std::{path::PathBuf, sync::Arc};
+use std::time::Duration;
+use reqwest::redirect::Policy;
 use tokio::sync::Mutex;
 
 pub trait CrawlFileExt {
@@ -146,14 +148,45 @@ impl PyDataset {
     }
 }
 
-#[pyfunction]
-#[pyo3(signature = (doi, /))]
-fn resolve_doi_to_url(_py: Python, doi: &str) -> PyResult<String> {
-    let rt = tokio::runtime::Runtime::new().unwrap(); // create a runtime
-    let url = rt
-        .block_on(inner_resolve_doi_to_url(doi))
-        .map_err(|err| PyRuntimeError::new_err(format!("{err}")))?;
-    Ok(url)
+#[pyclass]
+struct DOIResolver {
+    runtime: tokio::runtime::Runtime,
+    client: Client,
+}
+
+#[pymethods]
+impl DOIResolver {
+    #[new]
+    #[pyo3(signature = (timeout=5))]
+    fn new(timeout: u64) -> PyResult<Self> {
+        Ok(Self {
+            runtime: tokio::runtime::Runtime::new()
+                .map_err(|err| PyRuntimeError::new_err(format!("failed to create runtime: {err}")))?,
+            client: Client::builder()
+                .use_native_tls()
+                .timeout(Duration::from_secs(timeout))
+                .redirect(Policy::limited(5)) // limit number of redirects (relevant if follow_redirects is set to true)
+                .build()
+                .map_err(|err| PyRuntimeError::new_err(format!("failed to create client: {err}")))?,
+        })
+    }
+
+    #[pyo3(signature = (doi, follow_redirects=true))]
+    fn resolve(&self, doi: String, follow_redirects: bool) -> PyResult<String> {
+        self.runtime
+            .block_on(inner_resolve_doi_to_url(&self.client, &doi, follow_redirects))
+            .map_err(|err| PyRuntimeError::new_err(format!("{err}")))
+    }
+
+    #[pyo3(signature = (dois, follow_redirects=true))]
+    fn resolve_many(&self, dois: Vec<String>, follow_redirects: bool) -> PyResult<Vec<String>> {
+        let futures = dois.iter().map(|doi| inner_resolve_doi_to_url(&self.client, doi, follow_redirects));
+        self.runtime
+            .block_on(futures::future::join_all(futures))
+            .into_iter()
+            .collect::<Result<Vec<String>, _>>()
+            .map_err(|err| PyRuntimeError::new_err(format!("{err}")))
+    }
 }
 
 #[pyfunction]
@@ -433,7 +466,7 @@ async fn next_stream_file(
 #[pyo3(name = "datahugger")]
 fn datahuggerpy(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(resolve, m)?)?;
-    m.add_function(wrap_pyfunction!(resolve_doi_to_url, m)?)?;
+    m.add_class::<DOIResolver>()?;
     m.add_class::<PyDataset>()?;
     m.add_class::<PyEntryBase>()?;
 

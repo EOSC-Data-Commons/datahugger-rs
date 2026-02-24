@@ -205,8 +205,10 @@ async fn github_get_default_branch_commit(
 }
 
 async fn resolve_doi_to_url_with_base(
+    client: &reqwest::Client,
     doi: &str,
     base_url: Option<&str>,
+    follow_redirects: bool,
 ) -> Result<String, Exn<ResolveError>> {
     // check if doi is valid
     if !(doi.starts_with("10.") && doi.contains('/')) {
@@ -215,17 +217,14 @@ async fn resolve_doi_to_url_with_base(
         });
     }
 
-    let base_url = base_url.unwrap_or("https://doi.org");
+    let base_url = base_url.unwrap_or("https://doi.org/api/handles");
 
-    let client = ClientBuilder::new()
-        .use_native_tls()
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .or_raise(|| ResolveError {
-            message: String::from("Could not build reqwest client"),
-        })?;
-
-    let res = match client.get(format!("{}/{}", base_url, doi)).send().await {
+    let res = match client
+        .get(format!("{}/{}", base_url, doi))
+        .query(&[("type", "URL")])
+        .send()
+        .await
+    {
         Ok(res) => res,
         Err(err) => {
             exn::bail!(ResolveError {
@@ -234,25 +233,68 @@ async fn resolve_doi_to_url_with_base(
         }
     };
 
-    let location = match res.headers().get("Location") {
-        Some(header_value) => header_value
-            .to_str()
-            .or_raise(|| ResolveError {
-                message: String::from("Invalid Location header value"),
-            })?
-            .to_string(),
-        None => {
+    let status = res.status();
+
+    if !status.is_success() {
+        exn::bail!(ResolveError {
+            message: format!("failed to resolve '{doi}': status {status}")
+        });
+    }
+
+    let json: serde_json::Value = match res.json().await {
+        Ok(json) => json,
+        Err(err) => {
             exn::bail!(ResolveError {
-                message: String::from("No Location header in response")
+                message: format!("failed to parse response for '{doi}': {err:?}")
             })
         }
     };
 
-    Ok(location)
+    let url = match json.get("responseCode").and_then(|v| v.as_i64()) {
+        Some(1) => match json.get("values").and_then(|v| v.as_array()) {
+            Some(values) if !values.is_empty() => {
+                match values[0]
+                    .get("data")
+                    .and_then(|d| d.get("value"))
+                    .and_then(|v| v.as_str())
+                {
+                    Some(url) => Ok::<String, Exn<ResolveError>>(url.to_string()),
+                    None => exn::bail!(ResolveError {
+                        message: format!("missing data.value for '{doi}'")
+                    }),
+                }
+            }
+            _ => exn::bail!(ResolveError {
+                message: format!("empty or missing values for '{doi}'")
+            }),
+        },
+        Some(code) => exn::bail!(ResolveError {
+            message: format!("unexpected responseCode {code} for '{doi}'")
+        }),
+        None => exn::bail!(ResolveError {
+            message: format!("missing responseCode for '{doi}'")
+        }),
+    }?;
+
+    if follow_redirects {
+        let res = match client.head(&url).send().await {
+            Ok(res) => res,
+            Err(err) => exn::bail!(ResolveError {
+                message: format!("failed to follow redirect for '{url}': {err:?}")
+            }),
+        };
+        Ok(res.url().to_string())
+    } else {
+        Ok(url)
+    }
 }
 
-pub async fn resolve_doi_to_url(doi: &str) -> Result<String, Exn<ResolveError>> {
-    resolve_doi_to_url_with_base(doi, None).await
+pub async fn resolve_doi_to_url(
+    client: &reqwest::Client,
+    doi: &str,
+    follow_redirects: bool,
+) -> Result<String, Exn<ResolveError>> {
+    resolve_doi_to_url_with_base(client, doi, None, follow_redirects).await
 }
 
 /// # Errors
@@ -503,8 +545,9 @@ pub async fn resolve(url: &str) -> Result<Dataset, Exn<DispatchError>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
-    use wiremock::matchers::{method, path};
+    use wiremock::matchers::{method, path, query_param};
     use wiremock::{Mock, MockServer, ResponseTemplate};
     #[tokio::test]
     async fn test_resolve_dataverse_default() {
@@ -593,14 +636,38 @@ mod tests {
 
         Mock::given(method("GET"))
             .and(path("/10.34894/0B7ZLK"))
-            .respond_with(ResponseTemplate::new(301).append_header(
-                "Location",
-                "https://dataverse.nl/citation?persistentId=doi:10.34894/0B7ZLK",
-            ))
+            .and(query_param("type", "URL"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+        "responseCode": 1,
+        "values": [
+            {
+                "index": 1,
+                "type": "URL",
+                "data": {
+                    "format": "string",
+                    "value": "https://dataverse.nl/citation?persistentId=doi:10.34894/0B7ZLK"
+                },
+                "ttl": 86400,
+                "timestamp": "2021-12-23T16:59:30Z"
+            }
+        ]
+    })))
             .mount(&mock_server)
             .await;
 
-        let res = resolve_doi_to_url_with_base("10.34894/0B7ZLK", Some(&mock_server.uri())).await;
+        let client = reqwest::Client::builder()
+            .use_native_tls()
+            .timeout(Duration::from_secs(5))
+            .build()
+            .unwrap();
+
+        let res = resolve_doi_to_url_with_base(
+            &client,
+            "10.34894/0B7ZLK",
+            Some(&mock_server.uri()),
+            false,
+        )
+        .await;
 
         assert!(res.is_ok());
 
@@ -612,8 +679,10 @@ mod tests {
 
         // test an invalid DOI
         let res = resolve_doi_to_url_with_base(
-            "https://dpoi.org/10.34894/0B7ZLK",
+            &client,
+            "https://doi.org/10.34894/0B7ZLK",
             Some(&mock_server.uri()),
+            false,
         )
         .await;
 
@@ -621,7 +690,7 @@ mod tests {
 
         assert_eq!(
             res.unwrap_err().message,
-            "Invalid DOI: 'https://dpoi.org/10.34894/0B7ZLK'"
+            "Invalid DOI: 'https://doi.org/10.34894/0B7ZLK'"
         );
     }
 }
