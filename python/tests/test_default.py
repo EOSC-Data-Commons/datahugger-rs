@@ -35,6 +35,16 @@ def test_resolve_doi_blocking():
         "https://phys-techsciences.datastations.nl/citation?persistentId=doi:10.17026/DANS-2BA-UAVX",
     ]
 
+    urls = doi_resolver.resolve_many(
+        ["10.34894/0B7ZLK", "10.17026/DANS-2AC-ETD6", "10.17026/DANS-2BA-UAVX"], True
+    )
+
+    assert urls == [
+        "https://dataverse.nl/dataset.xhtml?persistentId=doi:10.34894/0B7ZLK",
+        "https://phys-techsciences.datastations.nl/dataset.xhtml?persistentId=doi:10.17026/DANS-2AC-ETD6",
+        "https://phys-techsciences.datastations.nl/dataset.xhtml?persistentId=doi:10.17026/DANS-2BA-UAVX",
+    ]
+
 
 def test_download(tmp_path: Path):
     """real call to download, can be not stable. Since it is only for the non-recommended API,

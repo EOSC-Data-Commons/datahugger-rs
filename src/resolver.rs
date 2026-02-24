@@ -235,8 +235,6 @@ async fn resolve_doi_to_url_with_base(
 
     let status = res.status();
 
-    //println!("{status:?}");
-
     if !status.is_success() {
         exn::bail!(ResolveError {
             message: format!("failed to resolve '{doi}': status {status}")

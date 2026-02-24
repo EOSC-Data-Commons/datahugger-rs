@@ -36,6 +36,7 @@ use pyo3_async_runtimes::tokio::future_into_py;
 use reqwest::{Client, ClientBuilder};
 use std::{path::PathBuf, sync::Arc};
 use std::time::Duration;
+use reqwest::redirect::Policy;
 use tokio::sync::Mutex;
 
 pub trait CrawlFileExt {
@@ -150,7 +151,7 @@ impl PyDataset {
 #[pyclass]
 struct DOIResolver {
     runtime: tokio::runtime::Runtime,
-    client: reqwest::Client,
+    client: Client,
 }
 
 #[pymethods]
@@ -161,9 +162,10 @@ impl DOIResolver {
         let timeout = timeout.unwrap_or(5);
         Self {
             runtime: tokio::runtime::Runtime::new().unwrap(),
-            client: reqwest::Client::builder()
+            client: Client::builder()
                 .use_native_tls()
                 .timeout(Duration::from_secs(timeout))
+                .redirect(Policy::limited(5)) // limit number of redirects (relevant if follow_redirects is set to true)
                 .build()
                 .unwrap()
         }
