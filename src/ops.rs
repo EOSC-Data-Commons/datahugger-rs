@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use exn::{Exn, ResultExt};
+use exn::{Exn, OptionExt, ResultExt};
 use futures_core::stream::BoxStream;
 use futures_util::{StreamExt, TryStreamExt};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
@@ -102,7 +102,19 @@ where
             pb.finish_and_clear();
             let mut stream = resp.bytes_stream();
             // prepare file dst
+            // NOTE: like in zenodo, the file path can exist without its parent dir as Dir entity
+            // being created first. To cover that case, the folder of the path will be created no
+            // matter it existed or not using `create_dir_all`.
+            // See issue #54.
             let path = dst.as_ref().join(file_meta.relative());
+            let parent_dir = path.parent().ok_or_raise(|| CrawlerError {
+                message: format!("connot get parent dir for '{}'", path.display()),
+                status: ErrorStatus::Permanent,
+            })?;
+            fs::create_dir_all(parent_dir).or_raise(|| CrawlerError {
+                message: format!("connot create folder dir of '{}'", parent_dir.display()),
+                status: ErrorStatus::Permanent,
+            })?;
             let mut fh = OpenOptions::new()
                 .write(true)
                 .create(true)
