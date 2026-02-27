@@ -16,6 +16,9 @@ use crate::{
 
 // https://zenodo.org/
 // API root url at https://zenodo.org/api/
+//
+// Zenodo use flatten folder tree structure, all files with nexted parent folder are list in one
+// API call.
 #[derive(Debug)]
 pub struct Zenodo {
     pub id: String,
@@ -43,6 +46,7 @@ impl DatasetBackend for Zenodo {
     }
 
     async fn list(&self, client: &Client, dir: DirMeta) -> Result<Vec<Entry>, Exn<RepoError>> {
+        // NOTE: for dev, the first entry point url for the `dir.api_url` is the `root_dir` (from `root_url`) of the Dataset
         let resp = client
             .get(dir.api_url.clone())
             .send()
