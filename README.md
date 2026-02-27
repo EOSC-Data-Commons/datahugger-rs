@@ -25,6 +25,8 @@ Support data repositories:
 | DataONE            | [dataone.org](https://www.dataone.org/) | [Supported DataONE repositories](https://github.com/EOSC-Data-Commons/datahugger-ng/blob/master/dataone-repo-list.md); requests to its umbrella repositories may be slow | [example](#repository-without-limitations) |
 
 
+[Open an issue](https://github.com/EOSC-Data-Commons/datahugger-ng/issues/new/choose) if a data repository you want to use not yet support.
+
 ### Install 
 
 prebuilt binaries via shell
