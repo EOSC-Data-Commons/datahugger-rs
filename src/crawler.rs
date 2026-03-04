@@ -44,7 +44,7 @@ pub fn crawl<D>(
     dataset_backend: Arc<D>,
     dir: DirMeta,
     mp: impl ProgressManager,
-    json: Option<String> // cannot be a borrowed &str due to static lifetime requirement
+    json: Option<String>, // cannot be a borrowed &str due to static lifetime requirement
 ) -> BoxStream<'static, Result<Entry, Exn<CrawlerError>>>
 where
     D: DatasetBackend + 'static + ?Sized,

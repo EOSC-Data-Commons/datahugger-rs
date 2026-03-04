@@ -33,23 +33,29 @@ impl Dataset {
         limit: usize,
     ) -> Result<(), Exn<CrawlerError>> {
         let root_dir = self.root_dir();
-        crawl(client.clone(), Arc::clone(&self.backend), root_dir, mp, None)
-            .try_for_each_concurrent(limit, |entry| async move {
-                match entry {
-                    Entry::Dir(dir_meta) => {
-                        println!("{dir_meta}");
-                    }
-                    Entry::File(file_meta) => {
-                        println!("{file_meta}");
-                    }
+        crawl(
+            client.clone(),
+            Arc::clone(&self.backend),
+            root_dir,
+            mp,
+            None,
+        )
+        .try_for_each_concurrent(limit, |entry| async move {
+            match entry {
+                Entry::Dir(dir_meta) => {
+                    println!("{dir_meta}");
                 }
-                Ok(())
-            })
-            .await
-            .or_raise(|| CrawlerError {
-                message: "crawl, download and validation failed".to_string(),
-                status: ErrorStatus::Permanent,
-            })?;
+                Entry::File(file_meta) => {
+                    println!("{file_meta}");
+                }
+            }
+            Ok(())
+        })
+        .await
+        .or_raise(|| CrawlerError {
+            message: "crawl, download and validation failed".to_string(),
+            status: ErrorStatus::Permanent,
+        })?;
         Ok(())
     }
 }
@@ -321,7 +327,7 @@ impl DownloadExt for Dataset {
             Arc::clone(&self.backend),
             root_dir,
             mp.clone(),
-            None
+            None,
         )
         // NOTE: limit set to 0 as default for cli download,
         // should set to 20 for polite crawling for every dataset, it limit the stream consumer rate.
@@ -362,7 +368,7 @@ impl CrawlExt for Dataset {
             Arc::clone(&self.backend),
             root_dir,
             mp.clone(),
-            None
+            None,
         )
     }
 }
