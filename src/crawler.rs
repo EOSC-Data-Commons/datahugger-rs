@@ -57,7 +57,7 @@ where
                 .expect("indicatif template error"),
         );
         pb.enable_steady_tick(std::time::Duration::from_millis(100));
-        pb.set_message(format!("listing files of {}", dir.api_url.as_str()));
+        pb.set_message(format!("listing files of {}", dir.api_url().as_str()));
 
         let entries = if let Some(json_str) = json {
             dataset_backend.list_from_json(&json_str, dir.clone())  // borrow here

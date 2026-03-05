@@ -26,12 +26,16 @@ fn analyse_json(json: &JsonValue, dir: &DirMeta) -> Result<Vec<Entry>, Exn<RepoE
     let mut entries = Vec::with_capacity(files.len());
     for (idx, filej) in files.iter().enumerate() {
         let endpoint = Endpoint {
-            parent_url: dir.api_url.clone(),
+            parent_url: dir.api_url().clone(),
             key: Some(format!("data.files.{idx}")),
         };
         let name: String = json_extract(filej, "dataFile.filename").or_raise(|| RepoError {
             message: "fail to extracting 'dataFile.filename' as String from json".to_string(),
         })?;
+        let restricted: bool = json_extract(filej, "restricted").or_raise(|| RepoError {
+            message: "fail to extracting 'dataFile.filename' as String from json".to_string(),
+        })?;
+        let downloadable = !restricted;
         let id: u64 = json_extract(filej, "dataFile.id").or_raise(|| RepoError {
             message: "fail to extracting 'dataFile.id' as u64 from json".to_string(),
         })?;
@@ -46,25 +50,57 @@ fn analyse_json(json: &JsonValue, dir: &DirMeta) -> Result<Vec<Entry>, Exn<RepoE
         let mime_type = mime::Mime::from_str(&mime_type).or_raise(|| RepoError {
             message: format!("fail to parse the '{}' to proper mime type", mime_type),
         })?;
-        let download_url = "https://dataverse.harvard.edu/api/access/datafile/";
-        let download_url = Url::from_str(download_url).or_raise(|| RepoError {
-            message: format!("cannot parse '{download_url}' download base url"),
-        })?;
+        let download_url = dir
+            .api_url()
+            .join("/api/access/datafile/")
+            .or_raise(|| RepoError {
+                message: "cannot parse download base url".to_string(),
+            })?;
         let download_url = download_url.join(&format!("{id}")).or_raise(|| RepoError {
             message: format!("cannot parse '{download_url}' download url"),
         })?;
-        // XXX: Is dataverse only MD5 support? there is dataFile.checksum.value as well
-        /*let hash: String = json_extract(filej, "dataFile.md5").or_raise(|| RepoError {
-            message: "fail to extracting 'dataFile.md5' as String from json".to_string(),
-        })?;*/
-        let checksum = Checksum::Md5(String::from("2f9fb7ee42fd5587a7ef42f2a7eaa4a0"));
+        let dst_path = match json_extract::<String>(filej, "directoryLabel") {
+            Ok(dir_label) => dir.join(&format!("{dir_label}/{name}")),
+            Err(_) => dir.join(&name),
+        };
+        let checksum_typ: String =
+            json_extract(filej, "dataFile.checksum.type").or_raise(|| RepoError {
+                message: "fail to extracting 'dataFile.checksum.type' as String from json"
+                    .to_string(),
+            })?;
+        let checksum = match checksum_typ.as_str() {
+            "MD5" | "md5" => {
+                let hash: String =
+                    json_extract(filej, "dataFile.checksum.value").or_raise(|| RepoError {
+                        message: "fail to extracting 'dataFile.checksum.value' as String from json"
+                            .to_string(),
+                    })?;
+                Checksum::Md5(hash)
+            }
+            "SHA-1" | "sha-1" => {
+                let hash: String =
+                    json_extract(filej, "dataFile.checksum.value").or_raise(|| RepoError {
+                        message: "fail to extracting 'dataFile.checksum.value' as String from json"
+                            .to_string(),
+                    })?;
+                Checksum::Sha1(hash)
+            }
+            v => {
+                exn::bail!(RepoError {
+                    message: format!(
+                        "{v} is not yet support, please open an issue so we can add it"
+                    )
+                });
+            }
+        };
         let file = FileMeta::new(
-            dir.join(&name),
+            dst_path,
             endpoint,
             download_url,
             Some(size),
             vec![checksum],
             Some(mime_type),
+            downloadable,
         );
         entries.push(Entry::File(file));
     }
@@ -114,7 +150,7 @@ impl DatasetBackend for DataverseDataset {
     }
 
     async fn list(&self, client: &Client, dir: DirMeta) -> Result<Vec<Entry>, Exn<RepoError>> {
-        println!("{}", dir.api_url);
+        println!("{}", dir.api_url());
 
         let resp = client
             .get(dir.api_url().clone())
