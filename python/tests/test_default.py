@@ -95,6 +95,9 @@ def test_crawl_file_from_json_blocking():
         "https://archaeology.datastations.nl/dataset.xhtml?persistentId=doi:10.17026/AR/0IZ6LW"
     )
 
+    for i in ds.crawl():
+        print(i)
+
     for i in ds.crawl_file():
         print(i)
 
