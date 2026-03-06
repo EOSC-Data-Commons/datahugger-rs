@@ -48,7 +48,6 @@ pub trait CrawlFileExt {
 
     fn crawl_file_from_json(
         self,
-        client: &Client,
         json: String,
         mp: impl ProgressManager,
     ) -> BoxStream<'static, Result<FileMeta, Exn<CrawlerError>>>;
@@ -62,7 +61,7 @@ impl CrawlFileExt for Dataset {
     ) -> BoxStream<'static, Result<FileMeta, Exn<CrawlerError>>> {
         let root_dir = self.root_dir();
         crawl(
-            client.clone(),
+            Some(client.clone()),
             Arc::clone(&self.backend),
             root_dir,
             mp.clone(),
@@ -79,13 +78,12 @@ impl CrawlFileExt for Dataset {
     }
     fn crawl_file_from_json(
         self,
-        client: &Client,
         json: String,
         mp: impl ProgressManager,
     ) -> BoxStream<'static, Result<FileMeta, Exn<CrawlerError>>> {
         let root_dir = self.root_dir();
         crawl(
-            client.clone(),  // You might not need client here?
+            None,
             Arc::clone(&self.backend),
             root_dir,
             mp.clone(),
@@ -179,14 +177,8 @@ impl PyDataset {
     }
 
     fn crawl_file_from_json(self_: PyRef<'_, Self>, json: String) -> PyResult<PyFileMetaStream> {
-        let user_agent = format!("datahugger-py/{}", env!("CARGO_PKG_VERSION"));
-        let client = ClientBuilder::new()
-            .user_agent(user_agent)
-            .build()
-            .map_err(|err| PyRuntimeError::new_err(format!("http client fail: {err}")))?;
         let mp = NoProgress;
-
-        let stream = self_.0.clone().crawl_file_from_json(&client, json, mp);
+        let stream = self_.0.clone().crawl_file_from_json(json, mp);
         let stream = PyFileMetaStream::new(stream);
         Ok(stream)
     }

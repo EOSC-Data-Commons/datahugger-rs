@@ -34,7 +34,7 @@ impl Dataset {
     ) -> Result<(), Exn<CrawlerError>> {
         let root_dir = self.root_dir();
         crawl(
-            client.clone(),
+            Some(client.clone()),
             Arc::clone(&self.backend),
             root_dir,
             mp,
@@ -323,7 +323,7 @@ impl DownloadExt for Dataset {
             status: ErrorStatus::Permanent,
         })?;
         crawl(
-            client.clone(),
+            Some(client.clone()),
             Arc::clone(&self.backend),
             root_dir,
             mp.clone(),
@@ -364,7 +364,7 @@ impl CrawlExt for Dataset {
     ) -> BoxStream<'static, Result<Entry, Exn<CrawlerError>>> {
         let root_dir = self.root_dir();
         crawl(
-            client.clone(),
+            Some(client.clone()),
             Arc::clone(&self.backend),
             root_dir,
             mp.clone(),

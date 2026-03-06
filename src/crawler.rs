@@ -40,7 +40,7 @@ impl ProgressManager for MultiProgress {
 /// indicatif template error
 // TODO: return fused BoxStream??
 pub fn crawl<D>(
-    client: Client,
+    client: Option<Client>,
     dataset_backend: Arc<D>,
     dir: DirMeta,
     mp: impl ProgressManager,
@@ -66,7 +66,11 @@ where
                     status: ErrorStatus::Persistent,
                 })?
         } else {
-            dataset_backend.list(&client, dir.clone())
+            let client = client.as_ref().ok_or_else(|| CrawlerError {
+        message: "client required when json is not provided".to_string(),
+        status: ErrorStatus::Persistent,
+    })?;
+            dataset_backend.list(client, dir.clone())
                 .await
                 .or_raise(|| CrawlerError {
                     message: format!("cannot list all entries of '{dir}', after retry"),
