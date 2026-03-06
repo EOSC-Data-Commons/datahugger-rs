@@ -34,7 +34,7 @@ class Dataset(object):
     def crawl_file(self) -> SyncAsyncIterator[FileEntry]:
         """returns a stream that can be either sync or async iterator over `FileEntry`"""
     def crawl_file_from_json(self, json: str) -> SyncAsyncIterator[FileEntry]:
-        """returns a stream that can be either sync or async iterator over `FileEntry """
+        """returns a stream that can be either sync or async iterator over `FileEntry`"""
 
     def crawl(self) -> SyncAsyncIterator[FileEntry | DirEntry]:
         """returns a stream that can be either sync or async iterator over `FileEntry | DirEntry`"""
