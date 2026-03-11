@@ -46,11 +46,6 @@ pub trait CrawlFileExt {
         mp: impl ProgressManager,
     ) -> BoxStream<'static, Result<FileMeta, Exn<CrawlerError>>>;
 
-    fn crawl_file_from_json(
-        self,
-        json: String,
-        mp: impl ProgressManager,
-    ) -> BoxStream<'static, Result<FileMeta, Exn<CrawlerError>>>;
 }
 
 impl CrawlFileExt for Dataset {
@@ -61,11 +56,10 @@ impl CrawlFileExt for Dataset {
     ) -> BoxStream<'static, Result<FileMeta, Exn<CrawlerError>>> {
         let root_dir = self.root_dir();
         crawl(
-            Some(client.clone()),
+            client.clone(),
             Arc::clone(&self.backend),
             root_dir,
             mp.clone(),
-            None
         )
         .filter_map(|res| async move {
             match res {
@@ -75,28 +69,6 @@ impl CrawlFileExt for Dataset {
             }
         })
         .boxed()
-    }
-    fn crawl_file_from_json(
-        self,
-        json: String,
-        mp: impl ProgressManager,
-    ) -> BoxStream<'static, Result<FileMeta, Exn<CrawlerError>>> {
-        let root_dir = self.root_dir();
-        crawl(
-            None,
-            Arc::clone(&self.backend),
-            root_dir,
-            mp.clone(),
-            Some(json)  // Pass JSON
-        )
-            .filter_map(|res| async move {
-                match res {
-                    Ok(Entry::Dir(_)) => None,
-                    Ok(Entry::File(f)) => Some(Ok(*f)),
-                    Err(e) => Some(Err(e)),
-                }
-            })
-            .boxed()
     }
 }
 
@@ -175,13 +147,6 @@ impl PyDataset {
         let stream = PyFileMetaStream::new(stream);
         Ok(stream)
     }
-
-    fn crawl_file_from_json(self_: PyRef<'_, Self>, json: String) -> PyResult<PyFileMetaStream> {
-        let mp = NoProgress;
-        let stream = self_.0.clone().crawl_file_from_json(json, mp);
-        let stream = PyFileMetaStream::new(stream);
-        Ok(stream)
-    }
 }
 
 #[pyclass]
@@ -235,11 +200,11 @@ impl DOIResolver {
 }
 
 #[pyfunction]
-#[pyo3(signature = (url, /))]
-fn resolve(_py: Python, url: &str) -> PyResult<PyDataset> {
+#[pyo3(signature = (url, content = None, /))]
+fn resolve(_py: Python, url: &str, content: Option<&str>) -> PyResult<PyDataset> {
     let rt = tokio::runtime::Runtime::new().unwrap(); // create a runtime
     let ds = rt
-        .block_on(inner_resolve(url))
+        .block_on(inner_resolve(url, content))
         .map_err(|err| PyRuntimeError::new_err(format!("{err}")))?;
     Ok(PyDataset(ds))
 }

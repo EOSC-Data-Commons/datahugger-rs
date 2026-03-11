@@ -14,6 +14,26 @@ use crate::{
     Checksum, DatasetBackend, DirMeta, Entry,
 };
 
+fn parse_url(base_url: Url, version: &str, id: &str) -> Url {
+    // "https://dataverse.harvard.edu/api/datasets/:persistentId/versions/:latest-published/?persistentId=doi:10.7910/DVN/KBHLOD"
+    // Safe to unwrap:
+    // - the base URL is a hard-coded, valid absolute URL
+    let mut url = base_url;
+    {
+        let mut segments = url.path_segments_mut().unwrap();
+        segments.extend([
+            "api",
+            "datasets",
+            ":persistentId",
+            "versions",
+            version, // e.g. ":latest-published"
+        ]);
+    }
+
+    url.query_pairs_mut().append_pair("persistentId", id);
+    url
+}
+
 fn analyse_json(json: &JsonValue, dir: &DirMeta) -> Result<Vec<Entry>, Exn<RepoError>> {
     let files = json
         .get("data")
@@ -147,23 +167,7 @@ impl DataverseDataset {
 #[async_trait]
 impl DatasetBackend for DataverseDataset {
     fn root_url(&self) -> Url {
-        // "https://dataverse.harvard.edu/api/datasets/:persistentId/versions/:latest-published/?persistentId=doi:10.7910/DVN/KBHLOD"
-        // Safe to unwrap:
-        // - the base URL is a hard-coded, valid absolute URL
-        let mut url = self.base_url.clone();
-        {
-            let mut segments = url.path_segments_mut().unwrap();
-            segments.extend([
-                "api",
-                "datasets",
-                ":persistentId",
-                "versions",
-                &self.version, // e.g. ":latest-published"
-            ]);
-        }
-
-        url.query_pairs_mut().append_pair("persistentId", &self.id);
-        url
+        parse_url(self.base_url.clone(), &self.version, &self.id)
     }
 
     async fn list(&self, client: &Client, dir: DirMeta) -> Result<Vec<Entry>, Exn<RepoError>> {
@@ -200,14 +204,50 @@ impl DatasetBackend for DataverseDataset {
         Ok(entries)
     }
 
-    fn list_from_json(&self, json: &str, dir: DirMeta) -> Result<Vec<Entry>, Exn<RepoError>> {
-        let json_value: JsonValue = serde_json::from_str(json).or_raise(|| RepoError {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+#[derive(Debug)]
+pub struct DataverseJsonSrcDataset {
+    pub id: String,
+    pub base_url: Url,
+    pub version: String,
+    pub content: &'static str,
+}
+
+impl DataverseJsonSrcDataset {
+    #[must_use]
+    pub fn new(
+        id: impl Into<String>,
+        base_url: &Url,
+        version: impl Into<String>,
+        content: String,
+    ) -> Self {
+        DataverseJsonSrcDataset {
+            id: id.into(),
+            base_url: base_url.clone(),
+            version: version.into(),
+            content: Box::leak(content.into_boxed_str()),
+        }
+    }
+}
+
+#[async_trait]
+impl DatasetBackend for DataverseJsonSrcDataset {
+    async fn list(&self, _client: &Client, dir: DirMeta) -> Result<Vec<Entry>, Exn<RepoError>> {
+        let json_value: JsonValue = serde_json::from_str(self.content).or_raise(|| RepoError {
             message: "Failed to parse JSON".to_string(),
         })?;
 
         let entries = analyse_json(&json_value, &dir)?;
 
         Ok(entries)
+    }
+
+    fn root_url(&self) -> Url {
+        parse_url(self.base_url.clone(), &self.version, &self.id)
     }
 
     fn as_any(&self) -> &dyn Any {

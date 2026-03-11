@@ -115,36 +115,26 @@ def test_dans(tmp_path: Path):
     ds.download_with_validation(tmp_path)
 
 
-def test_crawl_file_from_json_blocking():
-    ds = resolve(
-        "https://archaeology.datastations.nl/dataset.xhtml?persistentId=doi:10.17026/AR/0IZ6LW"
-    )
-
-    """
-    for i in ds.crawl():
-        print(i)
-
-    for i in ds.crawl_file():
-        print(i)
-    """
-
+def test_resolve_local():
     try:
-        print("request")
 
         response = requests.get(
             "https://archaeology.datastations.nl/api/datasets/:persistentId/versions/:latest-published?persistentId=doi:10.17026/AR/0IZ6LW",
             timeout=60,
         )
         response.raise_for_status()
-        dataverse_json = response.text
-
-        print(response.status_code)
+        dataverse = response.text
 
     except Exception as e:
         print("fetching JSON failed")
         raise e
 
-    for i in ds.crawl_file_from_json(dataverse_json):
+    ds = resolve(
+        "https://archaeology.datastations.nl/dataset.xhtml?persistentId=doi:10.17026/AR/0IZ6LW",
+        dataverse,
+    )
+
+    for i in ds.crawl_file():
         print(i)
 
 
