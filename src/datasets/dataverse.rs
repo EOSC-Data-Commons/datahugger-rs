@@ -47,11 +47,7 @@ fn analyse_json(json: &JsonValue, dir: &DirMeta) -> Result<Vec<Entry>, Exn<RepoE
                 message: "fail to extracting 'dataFile.creationDate' as String from json"
                     .to_string(),
             })?;
-        let last_modification_date: String = json_extract(filej, "dataFile.lastUpdateTime")
-            .or_raise(|| RepoError {
-                message: "fail to extracting 'dataFile.lastUpdateTime' as String from json"
-                    .to_string(),
-            })?;
+        let last_modification_date: Option<String> = json_extract(filej, "dataFile.lastUpdateTime").ok();
         let mime_type: String =
             json_extract(filej, "dataFile.contentType").or_raise(|| RepoError {
                 message: "fail to extracting 'dataFile.contentType' as String from json"
@@ -119,7 +115,7 @@ fn analyse_json(json: &JsonValue, dir: &DirMeta) -> Result<Vec<Entry>, Exn<RepoE
             Some(mime_type),
             Some(version.to_string()),
             Some(creation_date),
-            Some(last_modification_date),
+            last_modification_date,
             downloadable,
         );
         entries.push(Entry::File(Box::new(file)));
