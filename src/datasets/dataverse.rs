@@ -47,7 +47,8 @@ fn analyse_json(json: &JsonValue, dir: &DirMeta) -> Result<Vec<Entry>, Exn<RepoE
                 message: "fail to extracting 'dataFile.creationDate' as String from json"
                     .to_string(),
             })?;
-        let last_modification_date: Option<String> = json_extract(filej, "dataFile.lastUpdateTime").ok();
+        let last_modification_date: Option<String> =
+            json_extract(filej, "dataFile.lastUpdateTime").ok();
         let mime_type: String =
             json_extract(filej, "dataFile.contentType").or_raise(|| RepoError {
                 message: "fail to extracting 'dataFile.contentType' as String from json"
