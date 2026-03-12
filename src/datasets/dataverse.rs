@@ -139,7 +139,7 @@ fn analyse_json(json: &JsonValue, dir: &DirMeta) -> Result<Vec<Entry>, Exn<RepoE
             last_modification_date,
             downloadable,
         );
-        entries.push(Entry::File(Box::new(file)));
+        entries.push(Entry::File(file));
     }
 
     Ok(entries)
@@ -380,7 +380,7 @@ impl DatasetBackend for DataverseFile {
             None,
             downloadable,
         );
-        let entries = vec![Entry::File(Box::new(file))];
+        let entries = vec![Entry::File(file)];
 
         Ok(entries)
     }

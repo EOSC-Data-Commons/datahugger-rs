@@ -143,7 +143,7 @@ impl DatasetBackend for Zenodo {
                 None,
                 true,
             );
-            entries.push(Entry::File(Box::new(file)));
+            entries.push(Entry::File(file));
         }
 
         Ok(entries)

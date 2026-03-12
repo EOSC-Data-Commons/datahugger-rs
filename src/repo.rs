@@ -150,10 +150,11 @@ impl Hasher {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum Entry {
     Dir(DirMeta),
-    File(Box<FileMeta>),
+    File(FileMeta),
 }
 
 #[derive(Debug, Clone)]

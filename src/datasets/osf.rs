@@ -122,7 +122,7 @@ impl DatasetBackend for OSF {
                         None,
                         true,
                     );
-                    entries.push(Entry::File(Box::new(file)));
+                    entries.push(Entry::File(file));
                 }
                 "folder" => {
                     let api_url: String =

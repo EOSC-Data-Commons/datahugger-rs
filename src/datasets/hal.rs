@@ -132,7 +132,7 @@ impl DatasetBackend for HalScience {
                 None,
                 true,
             );
-            entries.push(Entry::File(Box::new(file)));
+            entries.push(Entry::File(file));
         }
 
         Ok(entries)
