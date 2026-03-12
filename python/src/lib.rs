@@ -34,10 +34,12 @@ use pyo3::{
 use pyo3::{ffi::c_str, types::PyDict};
 use pyo3_async_runtimes::tokio::future_into_py;
 use reqwest::redirect::Policy;
-use reqwest::{Client, ClientBuilder};
+use reqwest::{Client, ClientBuilder, Url};
 use std::time::Duration;
 use std::{path::PathBuf, sync::Arc};
+use std::collections::HashMap;
 use tokio::sync::Mutex;
+use datahugger::datasets::DataverseJsonSrcDataset;
 
 pub trait CrawlFileExt {
     fn crawl_file(
@@ -88,6 +90,49 @@ impl ProgressManager for NoProgress {
     fn insert_from_back(&self, _index: usize, _pb: ProgressBar) -> ProgressBar {
         ProgressBar::hidden()
     }
+}
+
+#[pyclass]
+#[pyo3(name = "DataverseJsonSrcDataset")]
+struct PyDataverseJsonSrcDataset(DataverseJsonSrcDataset);
+
+#[pymethods]
+impl PyDataverseJsonSrcDataset {
+    #[new]
+    fn new(url: String, content: String) -> PyResult<Self> {
+        let url = Url::parse(&url)
+            .map_err(|e| PyRuntimeError::new_err(format!("Invalid URL: {}", e)))?;
+
+        let mut segments = url.path_segments()
+            .ok_or_else(|| PyRuntimeError::new_err(format!("'{}' cannot be base", url)))?;
+
+        let typ = segments.next()
+            .ok_or_else(|| PyRuntimeError::new_err(format!("'{}' no segments found", url)))?;
+
+        let queries = url.query_pairs().collect::<HashMap<_, _>>();
+
+        let id = queries.get("persistentId")
+            .ok_or_else(|| PyRuntimeError::new_err("query doesn't contain 'persistentId'"))?
+            .to_string();
+
+        let _typ = typ.strip_suffix(".xhtml")
+            .ok_or_else(|| PyRuntimeError::new_err("segment not in format *.xhtml"))?;
+
+        let scheme = url.scheme();
+        let host_str = url.host_str()
+            .ok_or_else(|| PyRuntimeError::new_err("URL has no host"))?;
+
+        let base_url_str = format!("{}://{}", scheme, host_str);
+        let base_url = Url::parse(&base_url_str)
+            .map_err(|e| PyRuntimeError::new_err(format!("'{}' is not valid url: {}", base_url_str, e)))?;
+
+        let version = ":latest-published".to_string();
+
+        Ok(PyDataverseJsonSrcDataset(
+            DataverseJsonSrcDataset::new(id, &base_url, version, content)
+        ))
+    }
+
 }
 
 #[pymethods]
@@ -200,11 +245,11 @@ impl DOIResolver {
 }
 
 #[pyfunction]
-#[pyo3(signature = (url, content = None, /))]
-fn resolve(_py: Python, url: &str, content: Option<&str>) -> PyResult<PyDataset> {
+#[pyo3(signature = (url, /))]
+fn resolve(_py: Python, url: &str) -> PyResult<PyDataset> {
     let rt = tokio::runtime::Runtime::new().unwrap(); // create a runtime
     let ds = rt
-        .block_on(inner_resolve(url, content))
+        .block_on(inner_resolve(url))
         .map_err(|err| PyRuntimeError::new_err(format!("{err}")))?;
     Ok(PyDataset(ds))
 }
@@ -517,6 +562,7 @@ fn datahuggerpy(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<DOIResolver>()?;
     m.add_class::<PyDataset>()?;
     m.add_class::<PyEntryBase>()?;
+    m.add_class::<PyDataverseJsonSrcDataset>()?;
 
     // Dir
     let dir = py.get_type::<PyDirEntry>();

@@ -10,8 +10,8 @@ use url::Url;
 
 use crate::{
     datasets::{
-        Arxiv, DataDryad, Dataone, DataverseDataset, DataverseFile, DataverseJsonSrcDataset,
-        GitHub, HalScience, HuggingFace, Zenodo, OSF,
+        Arxiv, DataDryad, Dataone, DataverseDataset, DataverseFile, GitHub, HalScience,
+        HuggingFace, Zenodo, OSF,
     },
     json_extract,
     repo::Dataset,
@@ -305,7 +305,7 @@ pub async fn resolve_doi_to_url(
 /// # Errors
 /// ???
 #[allow(clippy::too_many_lines)]
-pub async fn resolve(url: &str, content: Option<&str>) -> Result<Dataset, Exn<DispatchError>> {
+pub async fn resolve(url: &str) -> Result<Dataset, Exn<DispatchError>> {
     let url = Url::from_str(url).or_raise(|| DispatchError {
         message: format!("'{url}' not a valid url"),
     })?;
@@ -365,23 +365,10 @@ pub async fn resolve(url: &str, content: Option<&str>) -> Result<Dataset, Exn<Di
         })?;
         let version = ":latest-published".to_string();
         match typ {
-            "dataset" => match content {
-                None => {
-                    let dataset =
-                        Dataset::new(DataverseDataset::new(id.as_ref(), &base_url, &version));
-                    return Ok(dataset);
-                }
-
-                Some(content) => {
-                    let dataset = Dataset::new(DataverseJsonSrcDataset::new(
-                        id.as_ref(),
-                        &base_url,
-                        &version,
-                        content.to_string(),
-                    ));
-                    return Ok(dataset);
-                }
-            },
+            "dataset" => {
+                let dataset = Dataset::new(DataverseDataset::new(id.as_ref(), &base_url, &version));
+                return Ok(dataset);
+            }
             "file" => {
                 let dataset = Dataset::new(DataverseFile::new(id.as_ref(), &base_url, &version));
                 return Ok(dataset);
@@ -571,7 +558,7 @@ mod tests {
     async fn test_resolve_dataverse_default() {
         // dataset
         let url = "https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/KBHLOD";
-        let qr = resolve(url, None).await.unwrap();
+        let qr = resolve(url).await.unwrap();
         let qr = qr
             .backend
             .as_any()
@@ -582,7 +569,7 @@ mod tests {
         // file
         let url =
             "https://dataverse.harvard.edu/file.xhtml?persistentId=doi:10.7910/DVN/KBHLOD/DHJ45U";
-        let qr = resolve(url, None).await.unwrap();
+        let qr = resolve(url).await.unwrap();
         let qr = qr.backend.as_any().downcast_ref::<DataverseFile>().unwrap();
         assert_eq!(qr.id.as_str(), "doi:10.7910/DVN/KBHLOD/DHJ45U");
     }
@@ -591,27 +578,27 @@ mod tests {
     async fn test_resolve_default() {
         // osf.io
         for url in ["https://osf.io/dezms/overview", "https://osf.io/dezms/"] {
-            let qr = resolve(url, None).await.unwrap();
+            let qr = resolve(url).await.unwrap();
             let qr = qr.backend.as_any().downcast_ref::<OSF>().unwrap();
             assert_eq!(qr.id.as_str(), "dezms");
         }
 
         // arxiv
         let url = "https://arxiv.org/abs/2101.00001v1";
-        let qr = resolve(url, None).await.unwrap();
+        let qr = resolve(url).await.unwrap();
         let qr = qr.backend.as_any().downcast_ref::<Arxiv>().unwrap();
         assert_eq!(qr.id.as_str(), "2101.00001v1");
 
         // Dataone
         let url = "https://arcticdata.io/catalog/view/doi%3A10.18739%2FA2542JB2X";
-        let qr = resolve(url, None).await.unwrap();
+        let qr = resolve(url).await.unwrap();
         let qr = qr.backend.as_any().downcast_ref::<Dataone>().unwrap();
         assert_eq!(qr.id.as_str(), "doi%3A10.18739%2FA2542JB2X");
         assert_eq!(qr.base_url.as_str(), "https://arcticdata.io/");
 
         // dryad
         let url = "https://datadryad.org/dataset/doi:10.5061/dryad.mj8m0";
-        let qr = resolve(url, None).await.unwrap();
+        let qr = resolve(url).await.unwrap();
         let qr = qr.backend.as_any().downcast_ref::<DataDryad>().unwrap();
         assert_eq!(qr.id.as_str(), "doi:10.5061/dryad.mj8m0");
 
@@ -628,13 +615,13 @@ mod tests {
 
         // hal
         let url = "https://hal.science/cel-01830944";
-        let qr = resolve(url, None).await.unwrap();
+        let qr = resolve(url).await.unwrap();
         let qr = qr.backend.as_any().downcast_ref::<HalScience>().unwrap();
         assert_eq!(qr.id.as_str(), "cel-01830944");
 
         // huggingface
         let url = "https://huggingface.co/datasets/HuggingFaceFW/finepdfs";
-        let qr = resolve(url, None).await.unwrap();
+        let qr = resolve(url).await.unwrap();
         let qr = qr.backend.as_any().downcast_ref::<HuggingFace>().unwrap();
         assert_eq!(qr.owner.as_str(), "HuggingFaceFW");
         assert_eq!(qr.repo.as_str(), "finepdfs");
@@ -642,7 +629,7 @@ mod tests {
 
         // zenodo
         let url = "https://zenodo.org/records/17867222";
-        let qr = resolve(url, None).await.unwrap();
+        let qr = resolve(url).await.unwrap();
         let qr = qr.backend.as_any().downcast_ref::<Zenodo>().unwrap();
         assert_eq!(qr.id.as_str(), "17867222");
     }

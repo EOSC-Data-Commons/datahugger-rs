@@ -3,7 +3,6 @@ import pathlib
 import pytest
 from pathlib import Path
 from datahugger import FileEntry, resolve, DOIResolver
-import requests
 
 
 def test_resolve_default():
@@ -94,28 +93,6 @@ def test_crawl_blocking():
     )
     for i in ds.crawl():
         print(i)
-
-    for i in ds.crawl_file():
-        print(i)
-
-
-def test_resolve_local(tmp_path: Path):
-    try:
-        response = requests.get(
-            "https://dataverse.harvard.edu/api/datasets/:persistentId/versions/:latest-published?persistentId=doi:10.7910/DVN/KBHLOD",
-            timeout=60,
-        )
-        response.raise_for_status()
-        dataverse = response.text
-
-    except Exception as e:
-        print("fetching JSON failed")
-        raise e
-
-    ds = resolve(
-        "https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/KBHLOD",
-        dataverse,
-    )
 
     for i in ds.crawl_file():
         print(i)

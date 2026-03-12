@@ -99,7 +99,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .default_headers(headers)
                 .use_native_tls()
                 .build()?;
-            let repo = match resolve(url, None).await {
+            let repo = match resolve(url).await {
                 Ok(repo) => repo,
                 Err(err) => {
                     eprintln!("failed to resolve '{url}': {err:?}");
@@ -140,7 +140,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .default_headers(headers)
                 .use_native_tls()
                 .build()?;
-            let repo = match resolve(url, None).await {
+            let repo = match resolve(url).await {
                 Ok(repo) => repo,
                 Err(err) => {
                     eprintln!("failed to resolve '{url}': {err:?}");
