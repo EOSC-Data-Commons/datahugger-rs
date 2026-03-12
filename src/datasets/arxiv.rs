@@ -50,6 +50,8 @@ impl DatasetBackend for Arxiv {
             key: Some(name.to_string()),
         };
         let file = FileMeta::new(
+            None,
+            None,
             dir.join(&format!("{name}.pdf")),
             endpoint,
             download_url,
@@ -57,6 +59,9 @@ impl DatasetBackend for Arxiv {
             vec![],
             // the mime-type of arxiv.org/pdf/ is surely a valid PDF
             Some(mime::APPLICATION_PDF),
+            None,
+            None,
+            None,
             true,
         );
 

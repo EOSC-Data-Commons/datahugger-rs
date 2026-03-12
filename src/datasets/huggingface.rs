@@ -118,6 +118,8 @@ impl DatasetBackend for HuggingFace {
                     let download_url = self.download_url(path.relative().as_str());
 
                     let file = FileMeta::new(
+                        None,
+                        None,
                         path,
                         Endpoint {
                             parent_url: dir.api_url(),
@@ -127,6 +129,9 @@ impl DatasetBackend for HuggingFace {
                         Some(size),
                         vec![checksum],
                         guess.first(),
+                        None,
+                        None,
+                        None,
                         true,
                     );
 

@@ -10,7 +10,7 @@ mod zenodo;
 
 pub use arxiv::Arxiv;
 pub use dataone::Dataone;
-pub use dataverse::{DataverseDataset, DataverseFile};
+pub use dataverse::{DataverseDataset, DataverseFile, DataverseJsonSrcDataset};
 pub use dryad::DataDryad;
 pub use github::GitHub;
 pub use hal::HalScience;

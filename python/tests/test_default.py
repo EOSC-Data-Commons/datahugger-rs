@@ -2,7 +2,8 @@ import asyncio
 import pathlib
 import pytest
 from pathlib import Path
-from datahugger import FileEntry, resolve, DOIResolver
+from datahugger import FileEntry, resolve, DOIResolver, DataverseJsonSrcDataset
+import requests
 
 
 def test_resolve_default():
@@ -67,7 +68,16 @@ def test_download(tmp_path: Path):
 
 def test_dataclass_constructor():
     entry = FileEntry(
-        pathlib.Path("/tmp/x"), "https://example.com/download_url", None, [], None
+        None,
+        None,
+        pathlib.Path("/tmp/x"),
+        "https://example.com/download_url",
+        None,
+        [],
+        None,
+        None,
+        None,
+        None,
     )
     assert str(entry.path_crawl_rel.as_posix()) == "/tmp/x"
     assert entry.download_url == "https://example.com/download_url"
@@ -84,6 +94,28 @@ def test_crawl_blocking():
     )
     for i in ds.crawl():
         print(i)
+
+    for i in ds.crawl_file():
+        print(i)
+
+
+def test_dataverse_from_json():
+    try:
+        response = requests.get(
+            "https://dataverse.harvard.edu/api/datasets/:persistentId/versions/:latest-published?persistentId=doi:10.7910/DVN/KBHLOD",
+            timeout=60,
+        )
+        response.raise_for_status()
+        dataverse = response.text
+
+    except Exception as e:
+        print("fetching JSON failed")
+        raise e
+
+    ds = DataverseJsonSrcDataset(
+        "https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/KBHLOD",
+        dataverse,
+    )
 
     for i in ds.crawl_file():
         print(i)

@@ -150,6 +150,7 @@ impl Hasher {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum Entry {
     Dir(DirMeta),
@@ -248,16 +249,29 @@ impl std::fmt::Display for Endpoint {
 /// than inspecting the actual data.
 #[derive(Debug)]
 pub struct FileMeta {
+    filename: Option<String>,
+    file_identifier: Option<String>,
     path: CrawlPath,
     endpoint: Endpoint,
     download_url: Url,
     size: Option<u64>,
     checksum: Vec<Checksum>,
     mimetype: Option<Mime>,
+    version: Option<String>,
+    creation_date: Option<String>,
+    last_modification_date: Option<String>,
     downloadable: bool,
 }
 
 impl FileMeta {
+    pub fn filename(&self) -> Option<&str> {
+        self.filename.as_deref()
+    }
+
+    pub fn file_identifier(&self) -> Option<&str> {
+        self.file_identifier.as_deref()
+    }
+
     /// Returns whether the file can be downloaded.
     pub fn is_downloadable(&self) -> bool {
         self.downloadable
@@ -283,9 +297,21 @@ impl FileMeta {
         self.size
     }
 
+    pub fn version(&self) -> Option<&str> {
+        self.version.as_deref()
+    }
+
     /// Returns the mimetype in bytes if known.
     pub fn mimetype(&self) -> Option<Mime> {
         self.mimetype.clone()
+    }
+
+    pub fn creation_date(&self) -> Option<&str> {
+        self.creation_date.as_deref()
+    }
+
+    pub fn last_modification_date(&self) -> Option<&str> {
+        self.last_modification_date.as_deref()
     }
 }
 
@@ -323,23 +349,34 @@ impl std::fmt::Display for FileMeta {
 }
 
 impl FileMeta {
+    #[allow(clippy::too_many_arguments)]
     #[must_use]
     pub fn new(
+        filename: Option<String>,
+        file_identifier: Option<String>,
         path: CrawlPath,
         endpoint: Endpoint,
         download_url: Url,
         size: Option<u64>,
         checksum: Vec<Checksum>,
         mimetype: Option<Mime>,
+        version: Option<String>,
+        creation_date: Option<String>,
+        last_modification_date: Option<String>,
         downloadable: bool,
     ) -> Self {
         FileMeta {
+            filename,
+            file_identifier,
             path,
             endpoint,
             download_url,
             size,
             checksum,
             mimetype,
+            version,
+            creation_date,
+            last_modification_date,
             downloadable,
         }
     }

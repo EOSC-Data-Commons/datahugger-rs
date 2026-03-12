@@ -34,10 +34,12 @@ use pyo3::{
 use pyo3::{ffi::c_str, types::PyDict};
 use pyo3_async_runtimes::tokio::future_into_py;
 use reqwest::redirect::Policy;
-use reqwest::{Client, ClientBuilder};
+use reqwest::{Client, ClientBuilder, Url};
 use std::time::Duration;
 use std::{path::PathBuf, sync::Arc};
+use std::collections::HashMap;
 use tokio::sync::Mutex;
+use datahugger::datasets::DataverseJsonSrcDataset;
 
 pub trait CrawlFileExt {
     fn crawl_file(
@@ -45,6 +47,7 @@ pub trait CrawlFileExt {
         client: &Client,
         mp: impl ProgressManager,
     ) -> BoxStream<'static, Result<FileMeta, Exn<CrawlerError>>>;
+
 }
 
 impl CrawlFileExt for Dataset {
@@ -87,6 +90,63 @@ impl ProgressManager for NoProgress {
     fn insert_from_back(&self, _index: usize, _pb: ProgressBar) -> ProgressBar {
         ProgressBar::hidden()
     }
+}
+
+#[pyclass]
+#[pyo3(name = "DataverseJsonSrcDataset")]
+struct PyDataverseJsonSrcDataset(Dataset);
+
+#[pymethods]
+impl PyDataverseJsonSrcDataset {
+    #[new]
+    fn new(url: String, content: String) -> PyResult<Self> {
+        let url = Url::parse(&url)
+            .map_err(|e| PyRuntimeError::new_err(format!("Invalid URL: {}", e)))?;
+
+        let mut segments = url.path_segments()
+            .ok_or_else(|| PyRuntimeError::new_err(format!("'{}' cannot be base", url)))?;
+
+        let typ = segments.next()
+            .ok_or_else(|| PyRuntimeError::new_err(format!("'{}' no segments found", url)))?;
+
+        let queries = url.query_pairs().collect::<HashMap<_, _>>();
+
+        let id = queries.get("persistentId")
+            .ok_or_else(|| PyRuntimeError::new_err("query doesn't contain 'persistentId'"))?
+            .to_string();
+
+        let _typ = typ.strip_suffix(".xhtml")
+            .ok_or_else(|| PyRuntimeError::new_err("segment not in format *.xhtml"))?;
+
+        let scheme = url.scheme();
+        let host_str = url.host_str()
+            .ok_or_else(|| PyRuntimeError::new_err("URL has no host"))?;
+
+        let base_url_str = format!("{}://{}", scheme, host_str);
+        let base_url = Url::parse(&base_url_str)
+            .map_err(|e| PyRuntimeError::new_err(format!("'{}' is not valid url: {}", base_url_str, e)))?;
+
+        let version = ":latest-published".to_string();
+
+        Ok(PyDataverseJsonSrcDataset(
+            Dataset {
+                backend: Arc::new(DataverseJsonSrcDataset::new(id, &base_url, version, content))
+            }
+        ))
+    }
+    fn crawl_file(&self) -> PyResult<PyFileMetaStream> {
+        let user_agent = format!("datahugger-py/{}", env!("CARGO_PKG_VERSION"));
+        let client = ClientBuilder::new()
+            .user_agent(user_agent)
+            .build()
+            .map_err(|err| PyRuntimeError::new_err(format!("http client fail: {err}")))?;
+        let mp = NoProgress;
+
+        let stream = self.0.clone().crawl_file(&client, mp);
+        let stream = PyFileMetaStream::new(stream);
+        Ok(stream)
+    }
+
 }
 
 #[pymethods]
@@ -261,6 +321,10 @@ struct PyDirEntry {
 #[pyo3(name = "FileEntry", extends=PyEntryBase)]
 struct PyFileEntry {
     #[pyo3(get, set)]
+    filename: Option<String>,
+    #[pyo3(get, set)]
+    file_identifier: Option<String>,
+    #[pyo3(get, set)]
     path_crawl_rel: PathBuf,
     #[pyo3(get, set)]
     download_url: String,
@@ -270,25 +334,41 @@ struct PyFileEntry {
     checksum: Vec<(String, String)>,
     #[pyo3(get, set)]
     mimetype: Option<String>,
+    #[pyo3(get, set)]
+    version: Option<String>,
+    #[pyo3(get, set)]
+    creation_date: Option<String>,
+    #[pyo3(get, set)]
+    last_modification_date: Option<String>,
 }
 
 #[pymethods]
 impl PyFileEntry {
     #[new]
     fn new(
+        filename: Option<String>,
+        file_identifier: Option<String>,
         path_crawl_rel: PathBuf,
         download_url: String,
         size: Option<u64>,
         checksum: Vec<(String, String)>,
         mimetype: Option<String>,
+        version: Option<String>,
+        creation_date: Option<String>,
+        last_modification_date: Option<String>,
     ) -> (Self, PyEntryBase) {
         (
             PyFileEntry {
+                filename,
+                file_identifier,
                 path_crawl_rel,
                 download_url,
                 size,
                 checksum,
                 mimetype,
+                version,
+                creation_date,
+                last_modification_date,
             },
             PyEntryBase::new(),
         )
@@ -322,6 +402,8 @@ impl<'py> IntoPyObject<'py> for PyEntry {
                 py,
                 (
                     PyFileEntry {
+                        filename: meta.filename().map(|s| s.to_string()),
+                        file_identifier: meta.file_identifier().map(|s| s.to_string()),
                         path_crawl_rel: PathBuf::from(meta.path().as_str()),
                         download_url: meta.download_url().as_str().to_string(),
                         size: meta.size(),
@@ -337,6 +419,9 @@ impl<'py> IntoPyObject<'py> for PyEntry {
                             })
                             .collect::<Vec<_>>(),
                         mimetype: meta.mimetype().map(|mime| mime.to_string()),
+                        version: meta.version().map(|v| v.to_string()),
+                        creation_date: meta.creation_date().map(|v| v.to_string()),
+                        last_modification_date: meta.last_modification_date().map(|v| v.to_string()),
                     },
                     PyEntryBase,
                 ),
@@ -363,6 +448,8 @@ impl<'py> IntoPyObject<'py> for PyFileMeta {
             py,
             (
                 PyFileEntry {
+                    filename: meta.filename().map(|s| s.to_string()),
+                    file_identifier: meta.file_identifier().map(|s| s.to_string()),
                     path_crawl_rel: PathBuf::from(meta.path().as_str()),
                     download_url: meta.download_url().as_str().to_string(),
                     size: meta.size(),
@@ -376,6 +463,9 @@ impl<'py> IntoPyObject<'py> for PyFileMeta {
                         })
                         .collect::<Vec<_>>(),
                     mimetype: meta.mimetype().map(|mime| mime.to_string()),
+                    version: meta.version().map(|v| v.to_string()),
+                    creation_date: meta.creation_date().map(|v| v.to_string()),
+                    last_modification_date: meta.last_modification_date().map(|v| v.to_string()),
                 },
                 PyEntryBase,
             ),
@@ -486,6 +576,7 @@ fn datahuggerpy(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<DOIResolver>()?;
     m.add_class::<PyDataset>()?;
     m.add_class::<PyEntryBase>()?;
+    m.add_class::<PyDataverseJsonSrcDataset>()?;
 
     // Dir
     let dir = py.get_type::<PyDirEntry>();
@@ -500,6 +591,10 @@ fn datahuggerpy(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // File
     let f = py.get_type::<PyFileEntry>();
     let ann = PyDict::new(py);
+    let filename_type = py.eval(c_str!("str | None"), None, None)?;
+    ann.set_item("filename", filename_type)?;
+    let file_identifier_type = py.eval(c_str!("str | None"), None, None)?;
+    ann.set_item("file_identifier", file_identifier_type)?;
     ann.set_item("path_crawl_rel", py.get_type::<pyo3::types::PyString>())?;
     ann.set_item("download_url", py.get_type::<pyo3::types::PyString>())?;
     let size_type = py.eval(c_str!("int | None"), None, None)?;
@@ -508,6 +603,12 @@ fn datahuggerpy(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     ann.set_item("checksum", checksum_type)?;
     let mimetype_type = py.eval(c_str!("str | None"), None, None)?;
     ann.set_item("mimetype", mimetype_type)?;
+    let version_type = py.eval(c_str!("str | None"), None, None)?;
+    ann.set_item("version", version_type)?;
+    let creation_date_type = py.eval(c_str!("str | None"), None, None)?;
+    ann.set_item("creation_date", creation_date_type)?;
+    let last_modification_date_type = py.eval(c_str!("str | None"), None, None)?;
+    ann.set_item("last_modification_date", last_modification_date_type)?;
     f.setattr("__annotations__", ann)?;
     py.import("dataclasses")?
         .getattr("dataclass")?

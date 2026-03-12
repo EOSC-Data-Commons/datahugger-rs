@@ -22,22 +22,45 @@ class DirEntry(Entry):
 
 @dataclass
 class FileEntry(Entry):
+    filename: str | None
+    file_identifier: str | None
     path_crawl_rel: pathlib.Path
     download_url: str
     size: int | None
     checksum: list[tuple[str, str]]
     mimetype: str | None
+    version: str | None
+    creation_date: str | None
+    last_modification_date: str | None
+
+class DataverseJsonSrcDataset:
+    """
+    A Dataverse dataset backend that uses pre-fetched JSON content.
+    """
+
+    def __init__(self, url: str, content: str) -> None:
+        """
+        Create a new DataverseJsonSrcDataset.
+
+        Args:
+            url: The Dataverse dataset URL (e.g., "https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/...")
+            content: The JSON content as a string
+
+        Raises:
+            RuntimeError: If the URL is invalid or missing required components
+        """
 
 class Dataset(object):
     def download_with_validation(self, dst_dir: pathlib.Path, limit: int = 0) -> None:
         """blocking call, using rust's async runtime"""
     def crawl_file(self) -> SyncAsyncIterator[FileEntry]:
-        """return a stream that can be either sync or async iterator over `FileEntry`"""
+        """returns a stream that can be either sync or async iterator over `FileEntry`"""
     def crawl(self) -> SyncAsyncIterator[FileEntry | DirEntry]:
-        """return a stream that can be either sync or async iterator over `FileEntry | DirEntry`"""
+        """returns a stream that can be either sync or async iterator over `FileEntry | DirEntry`"""
     def root_url(self) -> str: ...
 
-def resolve(url: str, /) -> Dataset: ...
+def resolve(url: str, /) -> Dataset:
+    """returns a dataset for the given domain"""
 
 class DOIResolver:
     def __init__(self, timeout: int = 5) -> None:
