@@ -47,7 +47,7 @@ def test_resolve_doi_blocking():
     ]
 
 
-def test_download(tmp_path: Path):
+def test_download(tmp_path: Path) -> None:
     """real call to download, can be not stable. Since it is only for the non-recommended API,
     this test is acceptable.
     """
