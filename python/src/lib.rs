@@ -93,7 +93,9 @@ impl ProgressManager for NoProgress {
 
 #[pyclass]
 #[pyo3(name = "DataverseJsonSrcDataset")]
-struct PyDataverseJsonSrcDataset(Dataset);
+struct PyDataverseJsonSrcDataset {
+    inner: PyDataset,
+}
 
 #[pymethods]
 impl PyDataverseJsonSrcDataset {
@@ -133,11 +135,14 @@ impl PyDataverseJsonSrcDataset {
 
         let version = ":latest-published".to_string();
 
-        Ok(PyDataverseJsonSrcDataset(Dataset {
+        let ds = Dataset {
             backend: Arc::new(DataverseJsonSrcDataset::new(
                 id, &base_url, version, content,
             )),
-        }))
+        };
+        Ok(Self {
+            inner: PyDataset(ds),
+        })
     }
     fn crawl_file(&self) -> PyResult<PyFileMetaStream> {
         let user_agent = format!("datahugger-py/{}", env!("CARGO_PKG_VERSION"));
@@ -147,7 +152,7 @@ impl PyDataverseJsonSrcDataset {
             .map_err(|err| PyRuntimeError::new_err(format!("http client fail: {err}")))?;
         let mp = NoProgress;
 
-        let stream = self.0.clone().crawl_file(&client, mp);
+        let stream = self.inner.0.clone().crawl_file(&client, mp);
         let stream = PyFileMetaStream::new(stream);
         Ok(stream)
     }
