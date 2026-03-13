@@ -58,6 +58,7 @@ jobs:
           uv run ruff check
           uv run ruff format --check
       - name: mypy static type checking
+        working-directory: python
         run: |
           uv run mypy .
       - name: Test Python

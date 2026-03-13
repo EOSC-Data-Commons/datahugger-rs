@@ -33,7 +33,7 @@ class FileEntry(Entry):
     creation_date: str | None
     last_modification_date: str | None
 
-class DataverseJsonSrcDataset:
+class DataverseJsonSrcDataset(Dataset):
     """
     A Dataverse dataset backend that uses pre-fetched JSON content.
     """

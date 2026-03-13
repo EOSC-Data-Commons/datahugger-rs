@@ -42,7 +42,6 @@ module = ["tests.*"]
 strict = false
 disallow_untyped_defs = false
 disallow_untyped_calls = false
-# disallow_any_unimported = false
 
 [[tool.mypy.overrides]]
 module = "datahugger.*"
