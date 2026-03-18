@@ -8,8 +8,7 @@ use reqwest::Client;
 use std::{any::Any, str::FromStr};
 
 use crate::{
-    repo::{Endpoint, FileMeta, RepoError},
-    DatasetBackend, DirMeta, Entry,
+    DatasetBackend, DirMeta, Entry, repo::{Endpoint, Fetcher, FileMeta, RepoError}
 };
 
 // https://arxiv.org/
@@ -39,7 +38,8 @@ impl DatasetBackend for Arxiv {
         url
     }
 
-    async fn list(&self, _client: &Client, dir: DirMeta) -> Result<Vec<Entry>, Exn<RepoError>> {
+    async fn list(&self, fetcher: &Fetcher) -> Result<Vec<Entry>, Exn<RepoError>> {
+        // let client = fetcher.
         let root_url = dir.root_url();
         // safe to unwrap, because I create the root_url
         let name: Vec<&str> = root_url.path_segments().unwrap().collect::<Vec<_>>();

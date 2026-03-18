@@ -6,7 +6,7 @@ use reqwest::Client;
 use async_stream::try_stream;
 use std::sync::Arc;
 
-use crate::{error::ErrorStatus, DatasetBackend, DirMeta, Entry};
+use crate::{error::ErrorStatus, repo::Fetcher, DatasetBackend, DirMeta, Entry};
 
 #[derive(Debug)]
 pub struct CrawlerError {
@@ -48,7 +48,7 @@ pub fn crawl<D>(
 where
     D: DatasetBackend + 'static + ?Sized,
 {
-    // TODO: how different this is compare to stream::iter(entries)....try_flatten()  ? 
+    // TODO: how different this is compare to stream::iter(entries)....try_flatten()  ?
     Box::pin(try_stream! {
         // TODO: this is at boundary need to deal with error to retry.
         let pb = mp.insert(0, ProgressBar::new_spinner());
@@ -58,7 +58,7 @@ where
         );
         pb.enable_steady_tick(std::time::Duration::from_millis(100));
         pb.set_message(format!("listing files of {}", dir.api_url().as_str()));
-        let entries = dataset_backend.list(&client, dir.clone())
+        let entries = dataset_backend.list()
             .await
             .or_raise(||
                 CrawlerError{

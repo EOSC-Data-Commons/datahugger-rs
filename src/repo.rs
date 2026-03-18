@@ -422,6 +422,12 @@ impl std::fmt::Display for RepoError {
 
 impl std::error::Error for RepoError {}
 
+#[derive(Debug)]
+pub enum Fetcher {
+    Reqwest { client: Client, dir: DirMeta },
+    LocalFS,
+}
+
 #[async_trait]
 pub trait DatasetBackend: Send + Sync + Any {
     // TODO: this is actually a bit useless abstraction, should be removed. It is now used through
@@ -439,7 +445,7 @@ pub trait DatasetBackend: Send + Sync + Any {
     /// implementation do not need to care too much about streaming but to just return a blob of
     /// files as a `Vec<Entry>`. It means the concurrent granulity is managed in the dir level not in file
     /// level.
-    async fn list(&self, client: &Client, dir: DirMeta) -> Result<Vec<Entry>, Exn<RepoError>>;
+    async fn list(&self) -> Result<Vec<Entry>, Exn<RepoError>>;
 
     /// `as_any` is called for the generic data type returned from resolve so it can be downcasted
     /// to the concrete type. It is useful if want to get information of concrete type such in the
