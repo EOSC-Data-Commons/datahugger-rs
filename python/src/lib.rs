@@ -18,6 +18,7 @@ pub fn main() {
 }
 
 use datahugger::datasets::DataverseJsonSrcDataset;
+use datahugger::datasets::ZenodoJsonSrcDataset;
 use datahugger::{
     crawl,
     crawler::{CrawlerError, ProgressManager},
@@ -157,6 +158,41 @@ impl PyDataverseJsonSrcDataset {
         Ok(stream)
     }
 }
+
+#[pyclass]
+#[pyo3(name = "ZenodoJsonSrcDataset")]
+struct PyZenodoJsonSrcDataset {
+    inner: PyDataset,
+}
+
+#[pymethods]
+impl PyZenodoJsonSrcDataset {
+    #[new]
+    fn new(id: String, content: String) -> PyResult<Self> {
+        let ds = Dataset {
+            backend: Arc::new(ZenodoJsonSrcDataset::new(
+                id, content,
+            )),
+        };
+        Ok(Self {
+            inner: PyDataset(ds),
+        })
+    }
+
+    fn crawl_file(&self) -> PyResult<PyFileMetaStream> {
+        let user_agent = format!("datahugger-py/{}", env!("CARGO_PKG_VERSION"));
+        let client = ClientBuilder::new()
+            .user_agent(user_agent)
+            .build()
+            .map_err(|err| PyRuntimeError::new_err(format!("http client fail: {err}")))?;
+        let mp = NoProgress;
+
+        let stream = self.inner.0.clone().crawl_file(&client, mp);
+        let stream = PyFileMetaStream::new(stream);
+        Ok(stream)
+    }
+}
+
 
 #[pymethods]
 impl PyDataset {
@@ -589,6 +625,7 @@ fn datahuggerpy(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyDataset>()?;
     m.add_class::<PyEntryBase>()?;
     m.add_class::<PyDataverseJsonSrcDataset>()?;
+    m.add_class::<PyZenodoJsonSrcDataset>()?;
 
     // Dir
     let dir = py.get_type::<PyDirEntry>();

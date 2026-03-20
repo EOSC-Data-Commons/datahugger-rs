@@ -2,7 +2,13 @@ import asyncio
 import pathlib
 import pytest
 from pathlib import Path
-from datahugger import FileEntry, resolve, DOIResolver, DataverseJsonSrcDataset
+from datahugger import (
+    FileEntry,
+    resolve,
+    DOIResolver,
+    DataverseJsonSrcDataset,
+    ZenodoJsonSrcDataset,
+)
 import requests
 
 
@@ -115,6 +121,28 @@ def test_dataverse_from_json():
     ds = DataverseJsonSrcDataset(
         "https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/KBHLOD",
         dataverse,
+    )
+
+    for i in ds.crawl_file():
+        print(i)
+
+
+def test_zenodo_from_json():
+    try:
+        response = requests.get(
+            "https://zenodo.org/api/records/19109278/files",
+            timeout=60,
+        )
+        response.raise_for_status()
+        zenodo = response.text
+
+    except Exception as e:
+        print("fetching JSON failed")
+        raise e
+
+    ds = ZenodoJsonSrcDataset(
+        "19109278",
+        zenodo,
     )
 
     for i in ds.crawl_file():
