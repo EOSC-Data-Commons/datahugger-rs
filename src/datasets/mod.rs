@@ -16,4 +16,4 @@ pub use github::GitHub;
 pub use hal::HalScience;
 pub use huggingface::HuggingFace;
 pub use osf::OSF;
-pub use zenodo::Zenodo;
+pub use zenodo::{Zenodo, ZenodoJsonSrcDataset};

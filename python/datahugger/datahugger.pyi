@@ -50,6 +50,23 @@ class DataverseJsonSrcDataset(Dataset):
             RuntimeError: If the URL is invalid or missing required components
         """
 
+class ZenodoJsonSrcDataset(Dataset):
+    """
+    A Dataverse dataset backend that uses pre-fetched JSON content.
+    """
+
+    def __init__(self, id: str, content: str) -> None:
+        """
+        Create a new DataverseJsonSrcDataset.
+
+        Args:
+            id: The Zenodo dataset ID, e.g., 931707
+            content: The JSON content as a string
+
+        Raises:
+            RuntimeError
+        """
+
 class Dataset(object):
     def download_with_validation(self, dst_dir: pathlib.Path, limit: int = 0) -> None:
         """blocking call, using rust's async runtime"""

@@ -5,12 +5,14 @@ from .datahugger import (
     FileEntry,
     Dataset,
     DataverseJsonSrcDataset,
+    ZenodoJsonSrcDataset,
 )
 
 __all__ = (
     "resolve",
     "DOIResolver",
     "DataverseJsonSrcDataset",
+    "ZenodoJsonSrcDataset",
     "DirEntry",
     "FileEntry",
     "Dataset",
