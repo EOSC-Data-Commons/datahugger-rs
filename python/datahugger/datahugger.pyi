@@ -52,7 +52,7 @@ class DataverseJsonSrcDataset(Dataset):
 
 class ZenodoJsonSrcDataset(Dataset):
     """
-    A Dataverse dataset backend that uses pre-fetched JSON content.
+    A Zenodo dataset backend that uses pre-fetched JSON content.
     """
 
     def __init__(self, id: str, content: str) -> None:
