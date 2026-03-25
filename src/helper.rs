@@ -67,7 +67,7 @@ where
     })
 }
 
-pub fn json_extract_opt<T>(value: &Value, path: &str) -> Result<Option<T>, JsonExtractError>
+pub(crate) fn json_extract_opt<T>(value: &Value, path: &str) -> Result<Option<T>, JsonExtractError>
 where
     T: DeserializeOwned,
 {

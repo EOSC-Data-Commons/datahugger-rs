@@ -13,6 +13,7 @@ use crate::{
     repo::{Endpoint, FileMeta, RepoError},
     DatasetBackend, DirMeta, Entry,
 };
+use crate::helper::json_extract_opt;
 
 // https://hal.science/
 // API root url at https://hal.science/<id>?
@@ -117,6 +118,19 @@ impl DatasetBackend for HalScience {
             let download_url = Url::from_str(download_url.as_str()).or_raise(|| RepoError {
                 message: format!("invalid download url '{download_url}'"),
             })?;
+
+            let creation_date = json_extract(filej, "producedDate_tdate").or_raise(
+                || RepoError {
+                    message: "fail to extracting 'producedDate_tdate' as String from json".to_string(),
+                }
+            )?;
+            let last_modification_date: Option<String> = json_extract_opt(filej, "modifiedDate_tdate").or_raise(|| RepoError {
+                message: "fail to extracting 'modifiedDate_tdate' as String from json".to_string(),
+            })?;
+            let version: Option<i64> = json_extract_opt(filej, "version_i").or_raise(|| RepoError {
+                message: "fail to extracting 'version_i' as String from json".to_string(),
+            })?;
+
             let file = FileMeta::new(
                 Some(filename.to_string()),
                 None,
@@ -126,9 +140,9 @@ impl DatasetBackend for HalScience {
                 None,
                 vec![],
                 guess.first(),
-                None,
-                None,
-                None,
+                version.map(|v| v.to_string()),
+                Some(creation_date),
+                last_modification_date,
                 true,
             );
             entries.push(Entry::File(file));
