@@ -155,6 +155,24 @@ mod tests {
     }
 
     #[test]
+    fn test_json_extract_array_with_non_numeric_id() {
+        let value = json!({
+            "data": [
+                1
+            ]
+        });
+
+        let err = json_extract::<i64>(&value, "data.a").unwrap_err();
+        assert!(
+            err.message
+                .to_string()
+                .contains("key 'a' cannot parse to an index at path 'data.a'"),
+            "{}",
+            err.message
+        );
+    }
+
+    #[test]
     fn test_json_extract_deserialize_error() {
         let value = serde_json::json!({
             "data": { "id": "not a number" }
@@ -163,5 +181,29 @@ mod tests {
         let xp = "data.id";
         let err = json_extract::<i64>(&value, xp).unwrap_err();
         assert!(err.to_string().contains("deserialize"));
+    }
+
+    #[test]
+    fn test_json_extract_optional_value() {
+        let value = json!({
+            "persons": [
+                {
+                    "name": "John Doe",
+                    "age": 43,
+                },
+                {
+                    "name": "Jane Doe"
+                }
+            ]
+        });
+
+        let xp1 = "persons.0.age";
+        let xp2 = "persons.1.age";
+
+        let age1: Option<i64> = json_extract_opt(&value, xp1).unwrap();
+        let age2: Option<i64> = json_extract_opt(&value, xp2).unwrap();
+
+        assert_eq!(age1, Some(43));
+        assert_eq!(age2, None);
     }
 }

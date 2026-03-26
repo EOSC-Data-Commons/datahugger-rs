@@ -106,23 +106,6 @@ def test_crawl_blocking():
         print(i)
 
 
-# "https://mnhn.hal.science/mnhn-03908194v1"
-def test_crawl_blocking_hal():
-    ds = resolve(
-        # "https://hal.science/hal-03933332"
-        # "https://hal.science/hal-04707203"
-        # "https://media.hal.science/medihal-00470736"
-        # "https://hal.inrae.fr/hal-02661316v1"
-        # "https://media.hal.science/medihal-00470850v1"
-        "https://hal.science/hal-04708506v1"
-    )
-    # for i in ds.crawl():
-    #    print(i)
-
-    for i in ds.crawl_file():
-        print(i)
-
-
 def test_dataverse_from_json():
     try:
         response = requests.get(
