@@ -1,6 +1,6 @@
 [package]
 name = "datahugger"
-version = "0.5.3"
+version = "0.6.0"
 edition = "2021"
 description = "Tool for fetching data and metadata from DOI or URL."
 authors = ["Jusong Yu <jusong.yu@pm.me>"]
@@ -27,6 +27,7 @@ clap = { version = "4.5.60", features = ["derive"] }
 digest = "0.10.7"
 exn = "0.3.0"
 futures-core = "0.3.31"
+globset = "0.4"
 futures-util = "0.3.31"
 hex = "0.4.3"
 indicatif = "0.18.4"
