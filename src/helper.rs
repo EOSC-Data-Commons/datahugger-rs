@@ -87,10 +87,10 @@ where
                     message: format!("key '{key}' cannot parse to an index at path '{path}'"),
                     status: ErrorStatus::Permanent,
                 })?;
-                match arr.get(idx) {
-                    Some(v) => v,
-                    None => return Ok(None), // Index out of bounds
-                }
+                arr.get(idx).ok_or(JsonExtractError {
+                    message: format!("array index {idx} out of bounds"),
+                    status: ErrorStatus::Permanent,
+                })?
             }
             _ => return Ok(None), // Can't descend into non-container
         };
@@ -138,7 +138,24 @@ mod tests {
         assert!(
             err.message
                 .to_string()
-                .contains("path 'data.0.name' not found"),
+                .contains("array index 0 out of bounds"),
+            "{}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn test_json_extract_missing_path_optional() {
+        let value = serde_json::json!({
+            "data": []
+        });
+
+        let xp = "data.0.name";
+        let err = json_extract_opt::<String>(&value, xp).unwrap_err();
+        assert!(
+            err.message
+                .to_string()
+                .contains("array index 0 out of bounds"),
             "{}",
             err.message
         );
