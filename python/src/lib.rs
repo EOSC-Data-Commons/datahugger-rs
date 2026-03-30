@@ -17,8 +17,8 @@ pub fn main() {
     probe_ssl_certs();
 }
 
-use datahugger::datasets::{DataverseJsonSrcDataset, HalJsonSrcDataset};
 use datahugger::datasets::ZenodoJsonSrcDataset;
+use datahugger::datasets::{DataverseJsonSrcDataset, HalJsonSrcDataset};
 use datahugger::{
     crawl,
     crawler::{CrawlerError, ProgressManager},
@@ -170,9 +170,7 @@ impl PyZenodoJsonSrcDataset {
     #[new]
     fn new(id: String, content: String) -> PyResult<Self> {
         let ds = Dataset {
-            backend: Arc::new(ZenodoJsonSrcDataset::new(
-                id, content,
-            )),
+            backend: Arc::new(ZenodoJsonSrcDataset::new(id, content)),
         };
         Ok(Self {
             inner: PyDataset(ds),
@@ -204,9 +202,7 @@ impl PyHalJsonSrcDataset {
     #[new]
     fn new(id: String, content: String) -> PyResult<Self> {
         let ds = Dataset {
-            backend: Arc::new(HalJsonSrcDataset::new(
-                id, content,
-            )),
+            backend: Arc::new(HalJsonSrcDataset::new(id, content)),
         };
         Ok(Self {
             inner: PyDataset(ds),
@@ -226,7 +222,6 @@ impl PyHalJsonSrcDataset {
         Ok(stream)
     }
 }
-
 
 #[pymethods]
 impl PyDataset {
